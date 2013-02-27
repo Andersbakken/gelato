@@ -46,9 +46,37 @@ Set<Path> findPathsDpkg(const Path &package, Set<String> &packages)
     return ret;
 }
 
+static Path::VisitResult visitor(const Path &path, void *userData)
+{
+    Set<Path> &files = *reinterpret_cast<Set<Path> *>(userData);
+    // if (path.isSymLink()) {
+    // error() << path << "isSymLink" << path.isSymLink() << path.isDir();
+    if (path.isSymLink()) {
+        files.insert(path);
+        if (path.isFile()) {
+            Path link = path.followLink();
+            link.resolve(Path::RealPath, path.parentDir());
+            visitor(link, userData);
+        }
+    } else if (path.isDir()) {
+        if (!path.isSymLink()) {
+            return Path::Recurse;
+        } else {
+            files.insert(path);
+        }
+    } else if (path.mode() & 0111) {
+        files.insert(path);
+    } else if (path.contains(".so")) {
+        files.insert(path);
+    }
+    return Path::Continue;
+}
+
 Set<Path> findPaths(const Path &compiler)
 {
     Set<Path> ret;
+    ret.insert(compiler);
+#if 0
     Process proc;
     if (proc.start("dpkg", List<String>() << "-S" << compiler)
         && proc.waitForFinished() && !proc.returnCode()) {
@@ -60,9 +88,25 @@ Set<Path> findPaths(const Path &compiler)
             return findPathsDpkg(package.left(colon), packages);
         }
     }
-
-    error() << proc.waitForFinished();
-    error() << proc.readAllStdOut() << proc.readAllStdErr();
+#endif
+    Process proc;
+    proc.start(compiler, List<String>() << "-v" << "-E" << "-");
+    proc.closeStdIn();
+    proc.waitForFinished();
+    const List<String> lines = proc.readAllStdErr().split('\n');
+    for (int i=0; i<lines.size(); ++i) {
+        const String &line = lines.at(i);
+        if (line.startsWith("COMPILER_PATH=")) {
+            const Set<String> paths = line.mid(14).split(':').toSet();
+            for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
+                const Path p = Path::resolved(*it);
+                if (p.isDir()) {
+                    p.visit(visitor, &ret);
+                }
+            }
+        }
+    }
+    // ### todo, tar.gz them up
     return ret;
 }
 
