@@ -1,0 +1,58 @@
+cmake_minimum_required(VERSION 2.8.6)
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/rct/CMakeLists.txt)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/rct/)
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}/rct/src/ ${CMAKE_CURRENT_SOURCE_DIR}/rct/include)
+  set(rct_LIBS ${CMAKE_CURRENT_SOURCE_DIR}/rct/librct.a)
+else()
+  message(FATAL_ERROR "Need to check out rct in /path/to/gelato/src:\ngit clone git://github.com/Andersbakken/rct.git")
+endif()
+
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+  add_definitions(-DGELATO_DEBUG)
+endif()
+
+add_definitions(-DOS_${CMAKE_SYSTEM_NAME})
+
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+  set(system_LIBS rt crypto)
+elseif(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+  add_definitions(-D__LONG_LONG_SUPPORTED)
+  set(system_LIBS pthread crypto)
+elseif(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  set(system_LIBS crypto)
+  find_program(SW_VER sw_vers)
+  execute_process(COMMAND "${SW_VER}" -productVersion OUTPUT_VARIABLE osver)
+  string(REPLACE "\n" "" osver "${osver}")
+  if(${osver} VERSION_LESS "10.7")
+    message("OS X ${osver} is too old for FSEvents, falling back to kqueue")
+  # else()
+  #   set(HAVE_FSEVENTS 1)
+  endif()
+  find_library(CORESERVICES_LIBRARY CoreServices)
+  find_path(CORESERVICES_INCLUDE "CoreServices/CoreServices.h")
+  find_library(COREFOUNDATION_LIBRARY CoreFoundation)
+  find_path(COREFOUNDATION_INCLUDE "CoreFoundation/CoreFoundation.h")
+endif()
+
+include_directories(${CMAKE_CURRENT_LIST_DIR} ${CORESERVICES_INCLUDE} ${COREFOUNDATION_INCLUDE})
+add_executable(gelato gelato.cpp)
+target_link_libraries(gelato ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} ${rct_LIBS} ${system_LIBS})
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/rct/CMakeLists.txt)
+  add_dependencies(gelato rct)
+endif()
+
+#if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+#add_custom_command(TARGET rdm POST_BUILD
+#COMMAND ${CMAKE_CURRENT_LIST_DIR}/fix-dylib.sh ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/bin/rdm)
+#add_custom_command(TARGET rc POST_BUILD
+#COMMAND ${CMAKE_CURRENT_LIST_DIR}/fix-dylib.sh ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/bin/rc)
+#if(GGELATO_ENABLED MATCHES 1)
+#add_custom_command(TARGET gr POST_BUILD
+#COMMAND ${CMAKE_CURRENT_LIST_DIR}/fix-dylib.sh ${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/bin/gr)
+#endif()
+#endif()
