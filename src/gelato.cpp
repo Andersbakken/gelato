@@ -65,7 +65,11 @@ static Path::VisitResult visitor(const Path &path, void *userData)
             files.insert(path);
         }
     } else if (path.mode() & 0111) {
-        files.insert(path);
+        char *buf = 0;
+        const int read = path.readAll(buf, 3);
+        if (read != 3 || strncmp(buf, "#!/", read))
+            files.insert(path);
+        delete[] buf;
     } else if (path.contains(".so")) {
         files.insert(path);
     }
