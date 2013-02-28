@@ -13,6 +13,7 @@ bool Job::parse(int argc, char **argv)
 {
     if (!argc || !argv) {
         clear();
+        printf("[%s] %s:%d: clear(); [after]\n", __func__, __FILE__, __LINE__);
         return false;
     }
 
@@ -26,10 +27,12 @@ bool Job::parse(int argc, char **argv)
         }
         mData->args[i - 1] = argv[i];
     }
-    // error() << dashO << dashE;
-    if ((dashE == -1) == (dashO == -1)) {
-        clear();
-        return false;
+    if (dashE == -1 && dashO != -1) {
+        mData->type = Compile;
+    } else if (dashE != -1 && dashO == -1) {
+        mData->type = Preprocess;
+    } else {
+        mData->type = Other;
     }
     mData->cwd = Path::pwd();
     mData->type = dashE != -1 ? Preprocess : Compile;
@@ -79,7 +82,6 @@ List<String> Job::preprocessArguments() const
 void Job::encode(Serializer &serializer)
 {
     serializer << mData->cwd << mData->args << static_cast<int>(mData->type) << mData->compiler;
-        
 }
 
 void Job::decode(Deserializer &deserializer)

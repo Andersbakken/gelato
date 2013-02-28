@@ -18,7 +18,8 @@ public:
     enum Type {
         Invalid,
         Preprocess,
-        Compile
+        Compile,
+        Other
     };
 
     Type type() const { return mData->type; }
