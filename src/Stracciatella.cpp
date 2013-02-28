@@ -28,7 +28,13 @@ int main(int argc, char **argv)
         }
     }
     if (!localJob) {
+        const Config config;
         LocalClient client;
+        if (client.connect(config.socketFile, 1000)) {
+            EventLoop loop;
+        } else {
+            localJob = true;
+        }
     }
     if (localJob) {
         job.execute();
