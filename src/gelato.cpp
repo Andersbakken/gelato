@@ -11,8 +11,8 @@ Set<Path> findPathsDpkg(const Path &package, Set<String> &packages)
     if (packages.insert(package)) {
         {
             Process proc;
-            if (proc.start("dpkg", List<String>() << "-L" << package)
-                && proc.waitForFinished() && !proc.returnCode()) {
+            if (proc.exec("dpkg", List<String>() << "-L" << package) == Process::Done
+                && !proc.returnCode()) {
                 const List<String> lines = proc.readAllStdOut().split('\n');
                 for (int i=0; i<lines.size(); ++i) {
                     const Path p = lines.at(i);
@@ -28,8 +28,8 @@ Set<Path> findPathsDpkg(const Path &package, Set<String> &packages)
         }
         {
             Process proc;
-            if (proc.start("apt-cache", List<String>() << "depends" << package)
-                && proc.waitForFinished() && !proc.returnCode()) {
+            if (proc.exec("apt-cache", List<String>() << "depends" << package) == Process::Done
+                && !proc.returnCode()) {
                 const List<String> lines = proc.readAllStdOut().split('\n');
                 for (int i=0; i<lines.size(); ++i) {
                     const String &line = lines.at(i);
@@ -82,8 +82,8 @@ Set<Path> findPaths(const Path &compiler)
     ret.insert(compiler);
 #if 0
     Process proc;
-    if (proc.start("dpkg", List<String>() << "-S" << compiler)
-        && proc.waitForFinished() && !proc.returnCode()) {
+    if (proc.exec("dpkg", List<String>() << "-S" << compiler) == Process::Done
+        && !proc.returnCode()) {
         String package = proc.readAllStdOut();
         const int colon = package.indexOf(':');
         if (colon != -1) {
@@ -94,9 +94,7 @@ Set<Path> findPaths(const Path &compiler)
     }
 #endif
     Process proc;
-    proc.start(compiler, List<String>() << "-v" << "-E" << "-");
-    proc.closeStdIn();
-    proc.waitForFinished();
+    proc.exec(compiler, List<String>() << "-v" << "-E" << "-");
     const List<String> lines = proc.readAllStdErr().split('\n');
     for (int i=0; i<lines.size(); ++i) {
         const String &line = lines.at(i);
@@ -117,11 +115,15 @@ Set<Path> findPaths(const Path &compiler)
 int main(int argc, char **argv)
 {
     EventLoop loop;
-    // Process proc;
-    // error() << "Balls" << proc.start("ls");
-    // error() << proc.waitForFinished();
-    // error() << proc.readAllStdErr() << proc.readAllStdOut();
-    // return 0;
+    /*
+    Process proc;
+    error() << "Balls" << proc.exec("ls");
+    error() << proc.readAllStdErr() << proc.readAllStdOut();
+    error() << "--==stuff==--";
+    error() << "Balls again" << proc.exec("find", List<String>() << "/usr/lib/" << "-name" << "*.so");
+    error() << proc.readAllStdErr() << proc.readAllStdOut();
+    return 0;
+    */
     for (int i=1; i<argc; ++i) {
         Set<Path> ret = findPaths(argv[i]);
         error() << ret.size();
