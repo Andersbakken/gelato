@@ -15,27 +15,28 @@ public:
     bool parse(int argc, char **argv);
 
     Path compiler() const { return mData->compiler; }
-    enum Mode {
+    enum Type {
         Invalid,
         Preprocess,
         Compile
     };
-    Mode mode() const { return mData->mode; }
-    List<String> arguments(Mode mode) const;
+
+    Type type() const { return mData->type; }
+    List<String> arguments() const { return mData->args; }
+    List<String> preprocessArguments() const;
 
     void encode(Serializer &serializer);
-    bool decode(Deserializer &deserializer);
+    void decode(Deserializer &deserializer);
 private:
     struct Data
     {
         Data()
-            : argc(0), argv(0), mode(Invalid), dashO(-1), dashE(-1)
+            : type(Invalid)
         {}
-        int argc;
-        char **argv;
-        Mode mode;
+        List<String> args;
+        Path cwd;
+        Type type;
         Path compiler;
-        int dashO, dashE;
     };
     shared_ptr<Data> mData;
 };
