@@ -44,8 +44,10 @@ include_directories(${CMAKE_CURRENT_LIST_DIR} ${CORESERVICES_INCLUDE} ${COREFOUN
 add_executable(gelato gelato.cpp)
 target_link_libraries(gelato ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} ${rct_LIBS} ${system_LIBS})
 
+add_executable(stracciatella Stracciatella.cpp Job.cpp)
+target_link_libraries(stracciatella ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} ${rct_LIBS} ${system_LIBS})
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/rct/CMakeLists.txt)
-  add_dependencies(gelato rct)
+  add_dependencies(stracciatella rct)
 endif()
 
 #if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
