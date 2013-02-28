@@ -48,6 +48,7 @@ add_executable(stracciatella Stracciatella.cpp Job.cpp)
 target_link_libraries(stracciatella ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} ${rct_LIBS} ${system_LIBS})
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/rct/CMakeLists.txt)
   add_dependencies(stracciatella rct)
+  add_dependencies(gelato rct)
 endif()
 
 #if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
