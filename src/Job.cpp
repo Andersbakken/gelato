@@ -17,19 +17,19 @@ bool Job::parse(int argc, char **argv)
         return false;
     }
 
-    int dashE = -1, dashO = -1;
+    int dashE = -1, dashC = -1;
     mData->args.resize(argc - 1);
     for (int i=1; i<argc; ++i) {
-        if (!strncmp(argv[i], "-E", 2)) {
+        if (!strcmp(argv[i], "-E")) {
             dashE = i;
-        } else if (!strncmp(argv[i], "-o", 2)) {
-            dashO = i;
+        } else if (!strcmp(argv[i], "-c")) {
+            dashC = i;
         }
         mData->args[i - 1] = argv[i];
     }
-    if (dashE == -1 && dashO != -1) {
+    if (dashE == -1 && dashC != -1) {
         mData->type = Compile;
-    } else if (dashE != -1 && dashO == -1) {
+    } else if (dashE != -1 && dashC == -1) {
         mData->type = Preprocess;
     } else {
         mData->type = Other;
