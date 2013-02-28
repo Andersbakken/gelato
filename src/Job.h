@@ -14,6 +14,8 @@ public:
     void clear();
     bool parse(int argc, char **argv);
 
+    bool execute() const;
+
     Path compiler() const { return mData->compiler; }
     enum Type {
         Invalid,

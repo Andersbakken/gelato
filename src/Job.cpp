@@ -79,6 +79,18 @@ List<String> Job::preprocessArguments() const
     return ret;
 }
 
+bool Job::execute() const
+{
+    const char* arguments[mData->args.size() + 2];
+    arguments[mData->args.size() + 1] = 0;
+    arguments[0] = mData->compiler.constData();
+    extern char **environ;
+    int ret;
+    eintrwrap(ret, execve(arguments[0], const_cast<char* const*>(arguments), const_cast<char* const*>(environ)));
+    error("execve failed somehow %d %d %s", ret, errno, strerror(errno));
+    return false;
+}
+
 void Job::encode(Serializer &serializer)
 {
     serializer << mData->cwd << mData->args << static_cast<int>(mData->type) << mData->compiler;

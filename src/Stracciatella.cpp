@@ -1,4 +1,6 @@
 #include <rct/Rct.h>
+#include <rct/LocalClient.h>
+#include "Config.h"
 #include "Job.h"
 #include <errno.h>
 
@@ -18,14 +20,19 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const List<String> args = job.arguments();
-    const char* arguments[args.size() + 2];
-    arguments[args.size() + 1] = 0;
-    const Path compiler = job.compiler();
-    arguments[0] = compiler.constData();
-    extern char **environ;
-    int ret;
-    eintrwrap(ret, execve(arguments[0], const_cast<char* const*>(arguments), const_cast<char* const*>(environ)));
-    error("execve failed somehow %d %d %s", ret, errno, strerror(errno));
-    return 1;
+    bool localJob = job.type() != Job::Compile;
+    if (!localJob) {
+        char *disabled = getenv("STRACCIATELLA_DISABLED");
+        if (disabled && !strcmp(disabled, "1")) {
+            localJob = true;
+        }
+    }
+    if (!localJob) {
+        LocalClient client;
+    }
+    if (localJob) {
+        job.execute();
+        return 1;
+    }
+
 }
