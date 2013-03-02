@@ -1,6 +1,6 @@
 #include <rct/Rct.h>
 #include <rct/LocalClient.h>
-#include "Config.h"
+#include <rct/Config.h>
 #include "Job.h"
 #include <errno.h>
 
@@ -28,13 +28,13 @@ int main(int argc, char **argv)
         }
     }
     if (!localJob) {
-        const Config config;
-        LocalClient client;
-        if (client.connect(config.socketFile, 1000)) {
-            EventLoop loop;
-        } else {
-            localJob = true;
-        }
+        // const Config config(argc, argv);
+        // LocalClient client;
+        // if (client.connect(config.socketFile, 1000)) {
+        //     EventLoop loop;
+        // } else {
+        localJob = true;
+        // }
     }
     if (localJob) {
         job.execute();
