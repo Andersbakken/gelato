@@ -3,9 +3,9 @@
 
 int main(int argc, char **argv)
 {
-    Config::registerOption<String>("socket-name", 's', "Unix domain socket to use (default ~/.gelato)", Path::home() + ".gelato");
-    Config::registerOption("help", 'h', "Display this help");
-    Config::registerOption("version", 'v', "Display version");
+    Config::registerOption<String>("socket-name", "Unix domain socket to use.", 's', Path::home() + ".gelato");
+    Config::registerOption("help", "Display this help", 'h');
+    Config::registerOption("version", "Display version", 'v');
     if (!Config::parse(argc, argv)) {
         Config::showHelp(stderr);
         return 1;
