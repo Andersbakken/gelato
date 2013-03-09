@@ -5,14 +5,18 @@
 #include <rct/String.h>
 #include <rct/Path.h>
 #include <rct/Serializer.h>
+#include <rct/Message.h>
 
-class Job
+class Job : public Message
 {
 public:
+    enum { MessageId = 1 };
     Job() : mData(new Data) {}
 
     void clear();
     bool parse(int argc, char **argv);
+
+    virtual int messageId() const { return MessageId; }
 
     bool execute() const;
 
@@ -28,8 +32,11 @@ public:
     List<String> arguments() const { return mData->args; }
     List<String> preprocessArguments() const;
 
-    void encode(Serializer &serializer);
-    void decode(Deserializer &deserializer);
+    void setTimeout(int ms) { mData->ms = ms; }
+    int timeout() const { return mData->ms; }
+
+    String encode() const;
+    void fromData(const char *data, int size);
 private:
     struct Data
     {
@@ -40,6 +47,7 @@ private:
         Path cwd;
         Type type;
         Path compiler;
+        int ms;
     };
     shared_ptr<Data> mData;
 };

@@ -1,5 +1,6 @@
 #include "Job.h"
 #include <rct/Rct.h>
+#include <rct/Serializer.h>
 
 void Job::clear()
 {
@@ -91,14 +92,18 @@ bool Job::execute() const
     return false;
 }
 
-void Job::encode(Serializer &serializer)
+String Job::encode() const
 {
-    serializer << mData->cwd << mData->args << static_cast<int>(mData->type) << mData->compiler;
+    String ret;
+    Serializer serializer(ret);
+    serializer << mData->cwd << mData->args << static_cast<int>(mData->type) << mData->compiler << mData->ms;
+    return ret;
 }
 
-void Job::decode(Deserializer &deserializer)
+void Job::fromData(const char *data, int length)
 {
+    Deserializer deserializer(data, length);
     int type;
-    deserializer >> mData->cwd >> mData->args >> type >> mData->compiler;
+    deserializer >> mData->cwd >> mData->args >> type >> mData->compiler >> mData->ms;
     mData->type = static_cast<Type>(type);
 }

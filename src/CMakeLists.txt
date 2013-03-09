@@ -44,14 +44,14 @@ include_directories(${CMAKE_CURRENT_LIST_DIR} ${CORESERVICES_INCLUDE} ${COREFOUN
 add_executable(gelato gelato.cpp)
 target_link_libraries(gelato ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} ${rct_LIBS} ${system_LIBS})
 
-add_executable(semifreddo Semifreddo.cpp Job.cpp)
+add_executable(semifreddo Semifreddo.cpp Job.cpp Daemon.cpp Common.cpp)
 target_link_libraries(semifreddo ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} ${rct_LIBS} ${system_LIBS})
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/rct/CMakeLists.txt)
   add_dependencies(semifreddo rct)
   add_dependencies(gelato rct)
 endif()
 
-add_executable(stracciatella Stracciatella.cpp Job.cpp)
+add_executable(stracciatella Stracciatella.cpp Job.cpp Common.cpp)
 target_link_libraries(stracciatella ${CORESERVICES_LIBRARY} ${COREFOUNDATION_LIBRARY} ${rct_LIBS} ${system_LIBS})
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/rct/CMakeLists.txt)
   add_dependencies(stracciatella rct)
