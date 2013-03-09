@@ -3,6 +3,8 @@
 #include <rct/Config.h>
 #include <rct/Messages.h>
 #include "Job.h"
+#include "Common.h"
+#include "Response.h"
 
 Daemon::Daemon()
 {
@@ -21,7 +23,7 @@ void Daemon::onClientConnected()
 
 bool Daemon::init()
 {
-    Messages::registerMessage<Job>();
+    registerMessages();
     return mLocalServer.listen(Config::value<String>("socket-name"));
 }
 

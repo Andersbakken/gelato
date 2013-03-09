@@ -5,6 +5,7 @@
 #include <rct/Messages.h>
 #include <rct/StopWatch.h>
 #include "Job.h"
+#include "Response.h"
 #include "Common.h"
 #include <errno.h>
 
@@ -16,7 +17,7 @@ public:
     {}
     void onNewMessage(Message *message, Connection *)
     {
-        if (message->
+        // if (message->
 
     }
 
@@ -37,6 +38,7 @@ static inline bool send(Job *job)
     if (!connection.connectToServer(Config::value<String>("socket-file"), connectTimeout))
         return false;
     job->setTimeout(timeout - watch.elapsed());
+    registerMessages();
     EventLoop loop;
     if (!connection.send(job) || connection.mTimeout)
         return false;
