@@ -12,17 +12,11 @@ public:
 
 private:
     void onClientConnected();
-    void onClientDisconnected(LocalClient *client);
+    void onConnectionDestroyed(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
 
     LocalServer mLocalServer;
-    struct Conn
-    {
-        LocalClient *client;
-        Connection *connection;
-    };
-    Map<int, Conn> mClients;
-    int mLastId;
+    Set<Connection*> mConnections;
 };
 
 #endif

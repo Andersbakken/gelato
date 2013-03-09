@@ -8,17 +8,39 @@
 #include "Common.h"
 #include <errno.h>
 
+class Conn : public Connection
+{
+public:
+    Conn()
+        : mTimeout(false)
+    {}
+    void onNewMessage(Message *message, Connection *)
+    {
+        if (message->
+
+    }
+
+    void timeout()
+    {
+        mTimeout = true;
+    }
+    bool mTimeout;
+};
+
 static inline bool send(Job *job)
 {
     StopWatch watch;
     const int timeout = Config::value<int>("timeout");
     const int connectTimeout = std::min(timeout, Config::value<int>("connect-timeout"));
-    Connection connection;
+    Conn connection;
 
     if (!connection.connectToServer(Config::value<String>("socket-file"), connectTimeout))
         return false;
     job->setTimeout(timeout - watch.elapsed());
-    connection.send(job);
+    EventLoop loop;
+    if (!connection.send(job) || connection.mTimeout)
+        return false;
+
 }
 
 int main(int argc, char **argv)
