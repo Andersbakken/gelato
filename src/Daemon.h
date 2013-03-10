@@ -1,9 +1,10 @@
 #ifndef Daemon_h
 #define Daemon_h
 
-#include <rct/LocalServer.h>
+#include <rct/SocketServer.h>
 #include <rct/Connection.h>
 
+class Job;
 class Daemon
 {
 public:
@@ -14,8 +15,9 @@ private:
     void onClientConnected();
     void onConnectionDestroyed(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
+    void handleJob(Job *job, Connection *conn);
 
-    LocalServer mLocalServer;
+    SocketServer mSocketServer;
     Set<Connection*> mConnections;
 };
 

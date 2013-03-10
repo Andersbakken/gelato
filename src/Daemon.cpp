@@ -1,5 +1,5 @@
 #include "Daemon.h"
-#include <rct/LocalClient.h>
+#include <rct/SocketClient.h>
 #include <rct/Config.h>
 #include <rct/Messages.h>
 #include "Job.h"
@@ -8,12 +8,12 @@
 
 Daemon::Daemon()
 {
-    mLocalServer.clientConnected().connect(this, &Daemon::onClientConnected);
+    mSocketServer.clientConnected().connect(this, &Daemon::onClientConnected);
 }
 
 void Daemon::onClientConnected()
 {
-    LocalClient *client = mLocalServer.nextClient();
+    SocketClient *client = mSocketServer.nextClient();
     assert(client);
     Connection *conn = new Connection(client);
     conn->destroyed().connect(this, &Daemon::onConnectionDestroyed);
@@ -24,15 +24,26 @@ void Daemon::onClientConnected()
 bool Daemon::init()
 {
     registerMessages();
-    return mLocalServer.listen(Config::value<String>("socket-name"));
+    return mSocketServer.listenUnix(Config::value<String>("socket-name"));
 }
 
 void Daemon::onNewMessage(Message *message, Connection *conn)
 {
-    
+    switch (message->messageId()) {
+    case Job::MessageId:
+        handleJob(static_cast<Job*>(message), conn);
+        break;
+    }
 }
 
 void Daemon::onConnectionDestroyed(Connection *conn)
 {
 
+}
+
+void Daemon::handleJob(Job *job, Connection *conn)
+{
+    Response response(Response::NoDaemons, "No daemons available");
+    conn->send(&response);
+    conn->finish();
 }

@@ -1,5 +1,5 @@
 #include <rct/Rct.h>
-#include <rct/LocalClient.h>
+#include <rct/SocketClient.h>
 #include <rct/Connection.h>
 #include <rct/Config.h>
 #include <rct/Messages.h>
@@ -12,20 +12,31 @@
 class Conn : public Connection
 {
 public:
-    Conn()
-        : mTimeout(false)
-    {}
+    Conn(int timeout)
+        : finished(false), status(Response::Timeout)
+    {
+        startTimer(timeout, SingleShot);
+        newMessage().connect(this, &Conn::onNewMessage);
+    }
     void onNewMessage(Message *message, Connection *)
     {
-        // if (message->
-
+        assert(message->messageId() == Response::MessageId);
+        Response *response = static_cast<Response*>(message);
+        status = response->status();
+        errorText = response->errorText();
+        stdOut = response->stdOut();
+        stdErr = response->stdErr();
+        EventLoop::instance()->exit();
     }
 
-    void timeout()
+    void timerEvent(TimerEvent *)
     {
-        mTimeout = true;
+        EventLoop::instance()->exit();
     }
-    bool mTimeout;
+
+    bool finished;
+    Response::Status status;
+    String stdOut, stdErr, errorText;
 };
 
 static inline bool send(Job *job)
@@ -33,16 +44,22 @@ static inline bool send(Job *job)
     StopWatch watch;
     const int timeout = Config::value<int>("timeout");
     const int connectTimeout = std::min(timeout, Config::value<int>("connect-timeout"));
-    Conn connection;
+    Conn connection(timeout);
 
     if (!connection.connectToServer(Config::value<String>("socket-file"), connectTimeout))
         return false;
     job->setTimeout(timeout - watch.elapsed());
     registerMessages();
     EventLoop loop;
-    if (!connection.send(job) || connection.mTimeout)
+    if (!connection.send(job))
         return false;
-
+    while (!connection.finished)
+        loop.run();
+    if (!connection.stdOut.isEmpty())
+        fprintf(stdout, "%s", connection.stdOut.constData());
+    if (!connection.stdErr.isEmpty())
+        fprintf(stderr, "%s", connection.stdErr.constData());
+    return connection.status == Response::Success;
 }
 
 int main(int argc, char **argv)

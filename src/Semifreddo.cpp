@@ -1,4 +1,4 @@
-#include <rct/LocalServer.h>
+#include <rct/SocketServer.h>
 #include <rct/Config.h>
 #include <rct/EventLoop.h>
 #include "Daemon.h"
