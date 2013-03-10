@@ -18,7 +18,7 @@ public:
 
     virtual int messageId() const { return MessageId; }
 
-    bool execute() const;
+    int execute() const;
 
     Path compiler() const { return mCompiler; }
     enum Type {

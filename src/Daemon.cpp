@@ -44,6 +44,7 @@ void Daemon::onConnectionDestroyed(Connection *conn)
 void Daemon::handleJob(Job *job, Connection *conn)
 {
     Response response(Response::NoDaemons, "No daemons available");
+    error() << "Got job" << job->arguments();
     conn->send(&response);
     conn->finish();
 }

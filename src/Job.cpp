@@ -41,7 +41,7 @@ bool Job::parse(int argc, char **argv)
     const Path fileName = self.fileName();
     self.resolve();
     const List<String> split = String(getenv("PATH")).split(':');
-    error() << split;
+    // error() << split;
     for (int i=0; i<split.size(); ++i) {
         Path p = split.at(i);
         if (p.isEmpty())
@@ -57,7 +57,6 @@ bool Job::parse(int argc, char **argv)
             }
         }
     }
-    error() << "Got this" << mCompiler;
     if (mCompiler.isEmpty()) {
         clear();
         return false;
@@ -82,14 +81,17 @@ List<String> Job::preprocessArguments() const
     return ret;
 }
 
-bool Job::execute() const
+int Job::execute() const
 {
     const char* arguments[mArgs.size() + 2];
     arguments[mArgs.size() + 1] = 0;
     arguments[0] = mCompiler.constData();
-    extern char **environ;
+    // extern char **environ;
     int ret;
-    eintrwrap(ret, execve(arguments[0], const_cast<char* const*>(arguments), const_cast<char* const*>(environ)));
+    String shit = mCompiler;
+    shit += " " + String::join(mArgs, " ");
+    return !system(shit.constData());
+    // eintrwrap(ret, execve(arguments[0], const_cast<char* const*>(arguments), const_cast<char* const*>(environ)));
     error("execve failed somehow %d %d %s", ret, errno, strerror(errno));
     return false;
 }

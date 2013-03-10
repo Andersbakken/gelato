@@ -39,7 +39,7 @@ public:
     String stdOut, stdErr, errorText;
 };
 
-static inline bool send(Job *job)
+static inline int send(Job *job, bool *ok)
 {
     StopWatch watch;
     const int timeout = Config::value<int>("timeout");
@@ -59,7 +59,9 @@ static inline bool send(Job *job)
         fprintf(stdout, "%s", connection.stdOut.constData());
     if (!connection.stdErr.isEmpty())
         fprintf(stderr, "%s", connection.stdErr.constData());
-    return connection.status == Response::Success;
+    if (ok)
+        *ok = connection.status == Response::Success;
+    return -1;
 }
 
 int main(int argc, char **argv)
@@ -99,9 +101,12 @@ int main(int argc, char **argv)
             localJob = true;
         }
     }
-    if (localJob || !send(&job)) {
-        job.execute();
-        return 1;
+    if (localJob) {
+        return job.execute();
     }
-
+    bool ok;
+    int ret = send(&job, &ok);
+    if (ok)
+        return ret;
+    return job.execute();
 }
