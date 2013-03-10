@@ -4,43 +4,44 @@
 
 void Job::clear()
 {
-    mData->cwd.clear();
-    mData->args.clear();
-    mData->type = Invalid;
-    mData->compiler.clear();
+    mCwd.clear();
+    mArgs.clear();
+    mType = Invalid;
+    mCompiler.clear();
+    mTimeout = -1;
 }
 
 bool Job::parse(int argc, char **argv)
 {
     if (!argc || !argv) {
         clear();
-        printf("[%s] %s:%d: clear(); [after]\n", __func__, __FILE__, __LINE__);
         return false;
     }
 
     int dashE = -1, dashC = -1;
-    mData->args.resize(argc - 1);
+    mArgs.resize(argc - 1);
     for (int i=1; i<argc; ++i) {
         if (!strcmp(argv[i], "-E")) {
             dashE = i;
         } else if (!strcmp(argv[i], "-c")) {
             dashC = i;
         }
-        mData->args[i - 1] = argv[i];
+        mArgs[i - 1] = argv[i];
     }
     if (dashE == -1 && dashC != -1) {
-        mData->type = Compile;
+        mType = Compile;
     } else if (dashE != -1 && dashC == -1) {
-        mData->type = Preprocess;
+        mType = Preprocess;
     } else {
-        mData->type = Other;
+        mType = Other;
     }
-    mData->cwd = Path::pwd();
-    mData->type = dashE != -1 ? Preprocess : Compile;
+    mCwd = Path::pwd();
+    mType = dashE != -1 ? Preprocess : Compile;
     Path self = Rct::executablePath();
     const Path fileName = self.fileName();
     self.resolve();
     const List<String> split = String(getenv("PATH")).split(':');
+    error() << split;
     for (int i=0; i<split.size(); ++i) {
         Path p = split.at(i);
         if (p.isEmpty())
@@ -51,12 +52,13 @@ bool Job::parse(int argc, char **argv)
         if (p.isFile()) {
             const Path resolved = p.resolved();
             if (resolved != self) {
-                mData->compiler = p;
+                mCompiler = p;
                 break;
             }
         }
     }
-    if (mData->compiler.isEmpty()) {
+    error() << "Got this" << mCompiler;
+    if (mCompiler.isEmpty()) {
         clear();
         return false;
     }
@@ -65,10 +67,10 @@ bool Job::parse(int argc, char **argv)
 
 List<String> Job::preprocessArguments() const
 {
-    if (mData->type == Preprocess)
-        return mData->args;
+    if (mType == Preprocess)
+        return mArgs;
 
-    List<String> ret = mData->args;
+    List<String> ret = mArgs;
     for (int i=0; i<ret.size(); ++i) {
         if (ret.at(i).startsWith("-o")) {
             if (ret[i].size() == 2 && i + 1 < ret.size())
@@ -82,9 +84,9 @@ List<String> Job::preprocessArguments() const
 
 bool Job::execute() const
 {
-    const char* arguments[mData->args.size() + 2];
-    arguments[mData->args.size() + 1] = 0;
-    arguments[0] = mData->compiler.constData();
+    const char* arguments[mArgs.size() + 2];
+    arguments[mArgs.size() + 1] = 0;
+    arguments[0] = mCompiler.constData();
     extern char **environ;
     int ret;
     eintrwrap(ret, execve(arguments[0], const_cast<char* const*>(arguments), const_cast<char* const*>(environ)));
@@ -96,7 +98,7 @@ String Job::encode() const
 {
     String ret;
     Serializer serializer(ret);
-    serializer << mData->cwd << mData->args << static_cast<int>(mData->type) << mData->compiler << mData->ms;
+    serializer << mCwd << mArgs << static_cast<int>(mType) << mCompiler << mTimeout;
     return ret;
 }
 
@@ -104,6 +106,6 @@ void Job::fromData(const char *data, int length)
 {
     Deserializer deserializer(data, length);
     int type;
-    deserializer >> mData->cwd >> mData->args >> type >> mData->compiler >> mData->ms;
-    mData->type = static_cast<Type>(type);
+    deserializer >> mCwd >> mArgs >> type >> mCompiler >> mTimeout;
+    mType = static_cast<Type>(type);
 }

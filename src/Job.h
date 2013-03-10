@@ -11,7 +11,7 @@ class Job : public Message
 {
 public:
     enum { MessageId = 1 };
-    Job() : mData(new Data) {}
+    Job() : mType(Invalid), mTimeout(-1) {}
 
     void clear();
     bool parse(int argc, char **argv);
@@ -20,7 +20,7 @@ public:
 
     bool execute() const;
 
-    Path compiler() const { return mData->compiler; }
+    Path compiler() const { return mCompiler; }
     enum Type {
         Invalid,
         Preprocess,
@@ -28,28 +28,21 @@ public:
         Other
     };
 
-    Type type() const { return mData->type; }
-    List<String> arguments() const { return mData->args; }
+    Type type() const { return mType; }
+    List<String> arguments() const { return mArgs; }
     List<String> preprocessArguments() const;
 
-    void setTimeout(int ms) { mData->ms = ms; }
-    int timeout() const { return mData->ms; }
+    void setTimeout(int ms) { mTimeout = ms; }
+    int timeout() const { return mTimeout; }
 
     String encode() const;
     void fromData(const char *data, int size);
 private:
-    struct Data
-    {
-        Data()
-            : type(Invalid)
-        {}
-        List<String> args;
-        Path cwd;
-        Type type;
-        Path compiler;
-        int ms;
-    };
-    shared_ptr<Data> mData;
+    List<String> mArgs;
+    Path mCwd;
+    Type mType;
+    Path mCompiler;
+    int mTimeout;
 };
 
 #endif
