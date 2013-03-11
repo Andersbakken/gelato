@@ -18,7 +18,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-
     int level = Error;
     int count;
     if (Config::isEnabled("verbose", &count))

@@ -9,10 +9,12 @@ class GelatoMessage : public Message
 {
 public:
     enum Type {
-        Quit
+        Invalid,
+        Quit,
+        Stats // ### need a client or something
     };
     enum { MessageId = 3 };
-    GelatoMessage(Type type) : Message(MessageId), mType(type) {}
+    GelatoMessage(Type type = Invalid) : Message(MessageId), mType(type) {}
     Type type() const { return mType; }
 
     virtual void encode(Serializer &serializer) const

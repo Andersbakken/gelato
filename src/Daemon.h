@@ -10,6 +10,7 @@ class Daemon
 {
 public:
     Daemon();
+    ~Daemon();
     bool init();
 
 private:

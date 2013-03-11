@@ -7,10 +7,24 @@
 #include "Common.h"
 #include "Result.h"
 #include "GelatoMessage.h"
+#include <signal.h>
+
+Path socketFile;
+static void sigIntHandler(int)
+{
+    Path::rm(socketFile);
+    _exit(1);
+}
 
 Daemon::Daemon()
 {
+    signal(SIGINT, sigIntHandler);
     mSocketServer.clientConnected().connect(this, &Daemon::onClientConnected);
+}
+
+Daemon::~Daemon()
+{
+    Path::rm(socketFile);
 }
 
 void Daemon::onClientConnected()
@@ -27,18 +41,27 @@ void Daemon::onClientConnected()
 bool Daemon::init()
 {
     registerMessages();
-    const Path file = Config::value<String>("socket-name");
-    if (mSocketServer.listenUnix(file))
+    socketFile = Config::value<String>("socket-name");
+    if (mSocketServer.listenUnix(socketFile))
         return true;
-    if (file.exists()) {
+    if (socketFile.exists()) {
+        Connection connection;
+        if (!connection.connectToServer(socketFile, 1000)) {
+            Path::rm(socketFile);
+            return mSocketServer.listenUnix(socketFile);
+        }
+
         GelatoMessage msg(GelatoMessage::Quit);
+        connection.send(&msg);
+        EventLoop::instance()->run(500);
+        for (int i=0; i<5; ++i) {
+            usleep(100 * 1000);
+            if (mSocketServer.listenUnix(socketFile)) {
+                return true;
+            }
+        }
 
-
-
-        Path::rm(file);
-        return mSocketServer.listenUnix(file);
     }
-    // ### should send a quit command and shit
     return false;
 }
 
@@ -48,6 +71,15 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     switch (message->messageId()) {
     case Job::MessageId:
         handleJob(static_cast<Job*>(message), conn);
+        break;
+    case GelatoMessage::MessageId:
+        switch (static_cast<GelatoMessage*>(message)->type()) {
+        case GelatoMessage::Quit:
+            EventLoop::instance()->exit();
+            break;
+        case GelatoMessage::Invalid:
+            break;
+        }
         break;
     }
 }
