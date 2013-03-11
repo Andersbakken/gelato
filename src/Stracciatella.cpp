@@ -41,8 +41,9 @@ public:
     int returnValue;
 };
 
-static inline int send(Job *job, bool *ok)
+static inline bool send(Job *job, int &returnCode)
 {
+    returnCode = -1;
     StopWatch watch;
     const int timeout = Config::value<int>("timeout");
     const int connectTimeout = std::min(timeout, Config::value<int>("connect-timeout"));
@@ -50,16 +51,12 @@ static inline int send(Job *job, bool *ok)
     connection->startTimer(timeout, EventReceiver::SingleShot);
 
     if (!connection->connectToServer(Config::value<String>("socket-name"), connectTimeout)) {
-        if (ok)
-            *ok = false;
-        return -1;
+        return false;
     }
     job->setTimeout(timeout - watch.elapsed());
     registerMessages();
     if (!connection->send(job)) {
-        if (ok)
-            *ok = false;
-        return -1;
+        return false;
     }
     while (connection->isConnected()) {
         // ### timeout here?
@@ -69,9 +66,9 @@ static inline int send(Job *job, bool *ok)
         fprintf(stdout, "%s", connection->stdOut.constData());
     if (!connection->stdErr.isEmpty())
         fprintf(stderr, "%s", connection->stdErr.constData());
-    if (ok)
-        *ok = connection->status == Result::Success;
-    return connection->returnValue;
+    returnCode = connection->returnValue;
+    return connection->status == Result::Success;
+    
 }
 
 int main(int argc, char **argv)
@@ -112,11 +109,9 @@ int main(int argc, char **argv)
             localJob = true;
         }
     }
-    if (!localJob) {
-        bool ok;
-        const int ret = send(&job, &ok);
-        if (ok)
-            return ret;
+    int ret;
+    if (!localJob && send(&job, ret)) {
+        return ret;
     }
         
     return job.execute();
