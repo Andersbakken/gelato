@@ -85,7 +85,9 @@ int Job::execute() const
 {
     String command = mCompiler;
     command += " " + String::join(mArgs, " ");
-    return system(command.constData());
+    const int ret = system(command.constData());
+    const int status = WEXITSTATUS(ret);
+    return status;
 }
 
 String Job::encode() const

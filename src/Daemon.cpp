@@ -2,6 +2,7 @@
 #include <rct/SocketClient.h>
 #include <rct/Config.h>
 #include <rct/Messages.h>
+#include <rct/Path.h>
 #include "Job.h"
 #include "Common.h"
 #include "Response.h"
@@ -24,7 +25,15 @@ void Daemon::onClientConnected()
 bool Daemon::init()
 {
     registerMessages();
-    return mSocketServer.listenUnix(Config::value<String>("socket-name"));
+    const Path file = Config::value<String>("socket-name");
+    if (mSocketServer.listenUnix(file))
+        return true;
+    if (file.exists()) {
+        Path::rm(file);
+        return mSocketServer.listenUnix(file);
+    }
+    // ### should send a quit command and shit
+    return false;
 }
 
 void Daemon::onNewMessage(Message *message, Connection *conn)
