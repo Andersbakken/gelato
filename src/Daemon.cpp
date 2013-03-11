@@ -19,7 +19,8 @@ static void sigIntHandler(int)
 Daemon::Daemon()
 {
     signal(SIGINT, sigIntHandler);
-    mSocketServer.clientConnected().connect(this, &Daemon::onClientConnected);
+    mLocalServer.clientConnected().connect(this, &Daemon::onLocalClientConnected);
+    mTcpServer.clientConnected().connect(this, &Daemon::onTcpClientConnected);
 }
 
 Daemon::~Daemon()
@@ -27,28 +28,33 @@ Daemon::~Daemon()
     Path::rm(socketFile);
 }
 
-void Daemon::onClientConnected()
+void Daemon::onTcpClientConnected()
 {
-    warning() << "onClientConnected";
-    SocketClient *client = mSocketServer.nextClient();
+
+}
+
+void Daemon::onLocalClientConnected()
+{
+    warning() << "onLocalClientConnected";
+    SocketClient *client = mLocalServer.nextClient();
     assert(client);
     Connection *conn = new Connection(client);
-    conn->disconnected().connect(this, &Daemon::onConnectionDisconnected);
+    conn->disconnected().connect(this, &Daemon::onLocalConnectionDisconnected);
     mConnections[conn] = ConnectionData();
-    conn->newMessage().connect(this, &Daemon::onNewMessage);
+    conn->newMessage().connect(this, &Daemon::onNewLocalMessage);
 }
 
 bool Daemon::init()
 {
     registerMessages();
     socketFile = Config::value<String>("socket-name");
-    if (mSocketServer.listenUnix(socketFile))
+    if (mLocalServer.listenUnix(socketFile))
         return true;
     if (socketFile.exists()) {
         Connection connection;
         if (!connection.connectToServer(socketFile, 1000)) {
             Path::rm(socketFile);
-            return mSocketServer.listenUnix(socketFile);
+            return mLocalServer.listenUnix(socketFile);
         }
 
         GelatoMessage msg(GelatoMessage::Quit);
@@ -56,7 +62,7 @@ bool Daemon::init()
         EventLoop::instance()->run(500);
         for (int i=0; i<5; ++i) {
             usleep(100 * 1000);
-            if (mSocketServer.listenUnix(socketFile)) {
+            if (mLocalServer.listenUnix(socketFile)) {
                 return true;
             }
         }
@@ -65,7 +71,7 @@ bool Daemon::init()
     return false;
 }
 
-void Daemon::onNewMessage(Message *message, Connection *conn)
+void Daemon::onNewLocalMessage(Message *message, Connection *conn)
 {
     warning() << "onNewMessage" << message->messageId();
     switch (message->messageId()) {
@@ -84,7 +90,7 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     }
 }
 
-void Daemon::onConnectionDisconnected(Connection *conn)
+void Daemon::onLocalConnectionDisconnected(Connection *conn)
 {
     warning() << "onConnectionDisconnected";
     mConnections.remove(conn);
@@ -99,8 +105,8 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
     data.process.setData(ConnectionPointer, conn);
     data.process.setCwd(job->cwd());
     data.process.finished().connect(this, &Daemon::onProcessFinished);
-    data.process.readyReadStdOut().connect(this, &Daemon::onReadyReadStdOut);
-    data.process.readyReadStdErr().connect(this, &Daemon::onReadyReadStdErr);
+    data.process.readyReadStdOut().connect(this, &Daemon::onProcessReadyReadStdOut);
+    data.process.readyReadStdErr().connect(this, &Daemon::onProcessReadyReadStdErr);
     if (!data.process.start(data.job.compiler(), data.job.arguments())) {
         Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
         conn->send(&response);
@@ -127,7 +133,7 @@ void Daemon::onProcessFinished(Process *process)
     conn->finish();
 }
 
-void Daemon::onReadyReadStdOut(Process *process)
+void Daemon::onProcessReadyReadStdOut(Process *process)
 {
     Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
     Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
@@ -136,7 +142,7 @@ void Daemon::onReadyReadStdOut(Process *process)
     data.stdOut += process->readAllStdOut();
 }
 
-void Daemon::onReadyReadStdErr(Process *process)
+void Daemon::onProcessReadyReadStdErr(Process *process)
 {
     Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
     Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
