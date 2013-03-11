@@ -36,6 +36,8 @@ public:
     void setTimeout(int ms) { mTimeout = ms; }
     int timeout() const { return mTimeout; }
 
+    Path cwd() const { return mCwd; }
+
     String encode() const;
     void fromData(const char *data, int size);
 private:

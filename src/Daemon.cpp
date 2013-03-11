@@ -60,6 +60,7 @@ void Daemon::handleJob(Job *job, Connection *conn)
     ConnectionData &data = mConnections[conn];
     data.job = job;
     data.process.setData(ConnectionPointer, conn);
+    data.process.setCwd(job->cwd());
     data.process.finished().connect(this, &Daemon::onProcessFinished);
     data.process.readyReadStdOut().connect(this, &Daemon::onReadyReadStdOut);
     data.process.readyReadStdErr().connect(this, &Daemon::onReadyReadStdErr);

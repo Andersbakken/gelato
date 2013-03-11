@@ -92,7 +92,18 @@ List<String> Job::preprocessArguments() const
 int Job::execute() const
 {
     String command = mCompiler;
-    command += " " + String::join(mArgs, " ");
+    for (int i=0; i<mArgs.size(); ++i) {
+        command.append(' ');
+
+        const String &arg = mArgs.at(i);
+        if (arg.contains(' ')) {
+            command.append('"');
+            command.append(arg);
+            command.append('"');
+        } else {
+            command.append(arg);
+        }
+    }
     const int ret = system(command.constData());
     const int status = WEXITSTATUS(ret);
     return status;

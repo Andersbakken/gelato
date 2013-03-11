@@ -8,14 +8,16 @@
 int main(int argc, char **argv)
 {
     Config::registerOption<String>("socket-name", "Unix domain socket to use.", 's', Path::home() + ".gelato");
+    Config::registerOption<String>("log-file", "Log to this file.", 'L');
     Config::registerOption("help", "Display this help", 'h');
     Config::registerOption("version", "Display version", 'V');
     Config::registerOption("verbose", "Be more verbose", 'v');
-    initLogging(Config::isEnabled("verbose") ? Warning : Error, "log.log", 0);
     if (!Config::parse(argc, argv)) {
         Config::showHelp(stderr);
         return 1;
     }
+
+    initLogging(Config::isEnabled("verbose") ? Warning : Error, Config::value<String>("log-file"), 0);
 
     if (Config::isEnabled("h")) {
         Config::showHelp(stdout);
