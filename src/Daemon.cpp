@@ -46,6 +46,14 @@ void Daemon::onLocalClientConnected()
 
 bool Daemon::init()
 {
+    mEnviron = Process::environment();
+    for (int i = 0; i < mEnviron.size(); ++i) {
+        if (mEnviron.at(i).startsWith("PATH=")) {
+            mEnviron.removeAt(i);
+            break;
+        }
+    }
+
     registerMessages();
     socketFile = Config::value<String>("socket-name");
     if (mLocalServer.listenUnix(socketFile))
@@ -99,7 +107,7 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
 
 void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balancing, max jobs etc
 {
-    warning() << "handleJob" << job->compiler() << job->arguments();
+    warning() << "handleJob" << job->compiler() << job->arguments() << job->path();
     ConnectionData &data = mConnections[conn];
     data.job = *job;
     data.process.setData(ConnectionPointer, conn);
@@ -107,8 +115,12 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
     data.process.finished().connect(this, &Daemon::onProcessFinished);
     data.process.readyReadStdOut().connect(this, &Daemon::onProcessReadyReadStdOut);
     data.process.readyReadStdErr().connect(this, &Daemon::onProcessReadyReadStdErr);
-    if (!data.process.start(data.job.compiler(), data.job.arguments())) {
-        Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
+
+    List<String> environ = mEnviron;
+    environ += ("PATH=" + job->path());
+
+    if (!data.process.start(data.job.compiler(), data.job.arguments(), environ)) {
+        const Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
         conn->send(&response);
         conn->finish();
     }

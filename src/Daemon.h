@@ -38,6 +38,7 @@ private:
         // flags, 32-bit, arch
     };
     Map<Path, Compiler> mCompilers;
+    List<String> mEnviron;
     Map<Connection*, ConnectionData> mConnections;
 };
 

@@ -8,6 +8,7 @@ void Job::clear()
     mArgs.clear();
     mType = Invalid;
     mCompiler.clear();
+    mPath.clear();
     mTimeout = -1;
 }
 
@@ -49,6 +50,7 @@ bool Job::parse(int argc, char **argv)
     const Path fileName = self.fileName();
     self.resolve();
     const List<String> split = String(getenv("PATH")).split(':');
+    mPath.clear();
     // error() << split;
     for (int i=0; i<split.size(); ++i) {
         Path p = split.at(i);
@@ -60,10 +62,15 @@ bool Job::parse(int argc, char **argv)
         if (p.isFile()) {
             const Path resolved = p.resolved();
             if (resolved != self) {
-                mCompiler = p;
-                break;
+                if (mCompiler.isEmpty())
+                    mCompiler = p;
+            } else {
+                continue;
             }
         }
+        if (!mPath.isEmpty())
+            mPath += ':';
+        mPath += split.at(i);
     }
     if (mCompiler.isEmpty()) {
         clear();
@@ -111,12 +118,12 @@ int Job::execute() const
 
 void Job::encode(Serializer &serializer) const
 {
-    serializer << mCwd << mArgs << static_cast<int>(mType) << mCompiler << mTimeout;
+    serializer << mCwd << mPath << mArgs << static_cast<int>(mType) << mCompiler << mTimeout;
 }
 
 void Job::decode(Deserializer &deserializer)
 {
     int type;
-    deserializer >> mCwd >> mArgs >> type >> mCompiler >> mTimeout;
+    deserializer >> mCwd >> mPath >> mArgs >> type >> mCompiler >> mTimeout;
     mType = static_cast<Type>(type);
 }
