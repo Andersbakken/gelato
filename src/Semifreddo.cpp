@@ -12,12 +12,18 @@ int main(int argc, char **argv)
     Config::registerOption("help", "Display this help", 'h');
     Config::registerOption("version", "Display version", 'V');
     Config::registerOption("verbose", "Be more verbose", 'v');
+    Config::registerOption<int>("jobs", "Number of jobs to run locally/serve from other clients concurrently", 'j', -1);
     if (!Config::parse(argc, argv)) {
         Config::showHelp(stderr);
         return 1;
     }
 
-    initLogging(Config::isEnabled("verbose") ? Warning : Error, Config::value<String>("log-file"), 0);
+
+    int level = Error;
+    int count;
+    if (Config::isEnabled("verbose", &count))
+        level += count;
+    initLogging(level, Config::value<String>("log-file"));
 
     if (Config::isEnabled("h")) {
         Config::showHelp(stdout);
