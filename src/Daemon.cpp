@@ -39,13 +39,8 @@ bool Daemon::init()
 void Daemon::onNewMessage(Message *message, Connection *conn)
 {
     switch (message->messageId()) {
-    case Job::MessageId: {
-        Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
-        if (it == mConnections.end()) {
-            conn->finish();
-            return;
-        }
-        it->second.job = static_cast<Job*>(message);
+    case Job::MessageId:
+        handleJob(static_cast<Job*>(message), conn);
         break;
     }
 }
@@ -58,8 +53,48 @@ void Daemon::onConnectionDisconnected(Connection *conn)
 
 void Daemon::handleJob(Job *job, Connection *conn)
 {
-    Response response(Response::NoDaemons, "No daemons available");
-    error() << "Got job" << job->arguments();
-    conn->send(&response);
-    conn->finish();
+    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
+    if (it == mConnections.end()) {
+        conn->finish();
+        return;
+    }
+    ConnectionData &data = it->second;
+    data.job = job;
+    data.process.setData(ConnectionPointer, conn);
+    data.process.finished().connect(this, &Daemon::onProcessFinished);
+    data.process.readyReadStdOut().connect(this, &Daemon::onReadyReadStdOut);
+    data.process.readyReadStdErr().connect(this, &Daemon::onReadyReadStdErr);
+    if (!data.process.start(data.job->compiler(), data.job->arguments())) {
+        Response response(Response::CompilerMissing, "Couldn't find compiler: " + data.job->compiler());
+        conn->send(&response);
+        conn->finish();
+        return;
+    }
+}
+
+void Daemon::onProcessFinished(Process *process)
+{
+    Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
+    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
+    assert(it != mConnections.end());
+    ConnectionData &data = it->second;
+
+}
+
+void Daemon::onReadyReadStdOut(Process *process)
+{
+    Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
+    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
+    assert(it != mConnections.end());
+    ConnectionData &data = it->second;
+    data.stdOut += process->readAllStdOut();
+}
+
+void Daemon::onReadyReadStdErr(Process *process)
+{
+    Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
+    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
+    assert(it != mConnections.end());
+    ConnectionData &data = it->second;
+    data.stdOut += process->readAllStdErr();
 }

@@ -16,12 +16,17 @@ private:
     void onClientConnected();
     void onConnectionDisconnected(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
-    void onProcessFinished();
+    void handleJob(Job *job, Connection *conn);
+    void onProcessFinished(Process *process);
+    void onReadyReadStdOut(Process *process);
+    void onReadyReadStdErr(Process *process);
 
+    enum { ConnectionPointer = 1 };
     SocketServer mSocketServer;
     struct ConnectionData {
         ConnectionData() : job(0) {}
-        shared_ptr<Process> process;
+        Process process;
+        String stdOut, stdErr;
         Job *job;
     };
     Map<Connection*, ConnectionData> mConnections;
