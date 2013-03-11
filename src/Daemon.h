@@ -4,8 +4,8 @@
 #include <rct/SocketServer.h>
 #include <rct/Connection.h>
 #include <rct/Process.h>
+#include "Job.h"
 
-class Job;
 class Daemon
 {
 public:
@@ -24,10 +24,9 @@ private:
     enum { ConnectionPointer = 1 };
     SocketServer mSocketServer;
     struct ConnectionData {
-        ConnectionData() : job(0) {}
         Process process;
         String stdOut, stdErr;
-        Job *job;
+        Job job;
     };
     Map<Connection*, ConnectionData> mConnections;
 };

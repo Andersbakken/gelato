@@ -58,14 +58,14 @@ void Daemon::handleJob(Job *job, Connection *conn)
 {
     warning() << "handleJob" << job->compiler() << job->arguments();
     ConnectionData &data = mConnections[conn];
-    data.job = job;
+    data.job = *job;
     data.process.setData(ConnectionPointer, conn);
     data.process.setCwd(job->cwd());
     data.process.finished().connect(this, &Daemon::onProcessFinished);
     data.process.readyReadStdOut().connect(this, &Daemon::onReadyReadStdOut);
     data.process.readyReadStdErr().connect(this, &Daemon::onReadyReadStdErr);
-    if (!data.process.start(data.job->compiler(), data.job->arguments())) {
-        Response response(Response::CompilerMissing, "Couldn't find compiler: " + data.job->compiler());
+    if (!data.process.start(data.job.compiler(), data.job.arguments())) {
+        Response response(Response::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
         conn->send(&response);
         conn->finish();
     }
@@ -79,6 +79,9 @@ void Daemon::onProcessFinished(Process *process)
     ConnectionData &data = it->second;
     data.stdOut += process->readAllStdOut();
     data.stdErr += process->readAllStdErr();
+    warning() << "Finished job" << data.job.compiler() << String::join(data.job.arguments(), " ")
+              << process->returnCode() << '\n'
+              << data.stdOut << '\n' << data.stdErr;
     Response response(process->returnCode(), data.stdOut, data.stdErr);
     conn->send(&response);
     conn->finish();
