@@ -13,6 +13,11 @@ void Job::clear()
 
 bool Job::parse(int argc, char **argv)
 {
+    // mArgs = String("-DGELATO_DEBUG -DOS_Darwin -g -I/Users/abakken/dev/gelato/src/rct/src -I/Users/abakken/dev/gelato/src/rct/include -I/Users/abakken/dev/gelato/src    -o CMakeFiles/stracciatella.dir/Stracciatella.cpp.o -c /Users/abakken/dev/gelato/src/Stracciatella.cpp").split(' ');
+    // mType = Compile;
+    // mCompiler = "/usr/bin/c++";
+    // mCwd = Path::pwd();
+    // return true;
     if (!argc || !argv) {
         clear();
         return false;

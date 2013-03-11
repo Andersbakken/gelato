@@ -13,7 +13,7 @@ public:
 
 private:
     void onClientConnected();
-    void onConnectionDestroyed(Connection *connection);
+    void onConnectionDisconnected(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
     void handleJob(Job *job, Connection *conn);
 

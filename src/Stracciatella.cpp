@@ -13,11 +13,11 @@ class Conn : public Connection
 {
 public:
     Conn(int timeout)
-        : finished(false), status(Response::Timeout)
+        : status(Response::Timeout)
     {
-        startTimer(timeout, SingleShot);
         newMessage().connect(this, &Conn::onNewMessage);
     }
+
     void onNewMessage(Message *message, Connection *)
     {
         assert(message->messageId() == Response::MessageId);
@@ -26,6 +26,7 @@ public:
         errorText = response->errorText();
         stdOut = response->stdOut();
         stdErr = response->stdErr();
+        client()->disconnect();
         EventLoop::instance()->exit();
     }
 
@@ -34,7 +35,6 @@ public:
         EventLoop::instance()->exit();
     }
 
-    bool finished;
     Response::Status status;
     String stdOut, stdErr, errorText;
 };
@@ -44,23 +44,30 @@ static inline int send(Job *job, bool *ok)
     StopWatch watch;
     const int timeout = Config::value<int>("timeout");
     const int connectTimeout = std::min(timeout, Config::value<int>("connect-timeout"));
-    Conn connection(timeout);
+    shared_ptr<Conn> connection(new Conn(timeout));
+    connection->startTimer(timeout, EventReceiver::SingleShot);
 
-    if (!connection.connectToServer(Config::value<String>("socket-file"), connectTimeout))
+    if (!connection->connectToServer(Config::value<String>("socket-name"), connectTimeout)) {
         return false;
+    }
     job->setTimeout(timeout - watch.elapsed());
     registerMessages();
-    EventLoop loop;
-    if (!connection.send(job))
+    printf("[%s] %s:%d: if (!connection->send(job)) { [before]\n", __func__, __FILE__, __LINE__);
+    if (!connection->send(job)) {
+        printf("[%s] %s:%d: if (!connection->send(job)) { [after]\n", __func__, __FILE__, __LINE__);
         return false;
-    while (!connection.finished)
-        loop.run();
-    if (!connection.stdOut.isEmpty())
-        fprintf(stdout, "%s", connection.stdOut.constData());
-    if (!connection.stdErr.isEmpty())
-        fprintf(stderr, "%s", connection.stdErr.constData());
+    }
+    printf("[%s] %s:%d: while (connection->isConnected()) { [before]\n", __func__, __FILE__, __LINE__);
+    while (connection->isConnected()) {
+        printf("[%s] %s:%d: while (connection->isConnected()) { [after]\n", __func__, __FILE__, __LINE__);
+        EventLoop::instance()->run();
+    }
+    if (!connection->stdOut.isEmpty())
+        fprintf(stdout, "%s", connection->stdOut.constData());
+    if (!connection->stdErr.isEmpty())
+        fprintf(stderr, "%s", connection->stdErr.constData());
     if (ok)
-        *ok = connection.status == Response::Success;
+        *ok = connection->status == Response::Success;
     return -1;
 }
 
@@ -80,7 +87,8 @@ int main(int argc, char **argv)
         printf("Stracciatella version %s", VERSION);
         return 0;
     }
-    
+
+    EventLoop loop;
     Job job;
     if (!job.parse(argc, argv)) {
         String args;
@@ -101,12 +109,14 @@ int main(int argc, char **argv)
             localJob = true;
         }
     }
-    if (localJob) {
-        return job.execute();
+    if (!localJob) {
+        bool ok;
+        printf("[%s] %s:%d: int ret = send(&job, &ok); [before]\n", __func__, __FILE__, __LINE__);
+        int ret = send(&job, &ok);
+        printf("[%s] %s:%d: int ret = send(&job, &ok); [after]\n", __func__, __FILE__, __LINE__);
+        if (ok)
+            return ret;
     }
-    bool ok;
-    int ret = send(&job, &ok);
-    if (ok)
-        return ret;
+        
     return job.execute();
 }
