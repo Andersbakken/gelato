@@ -68,7 +68,6 @@ static inline bool send(Job *job, int &returnCode)
         fprintf(stderr, "%s", connection->stdErr.constData());
     returnCode = connection->returnValue;
     return connection->status == Result::Success;
-    
 }
 
 int main(int argc, char **argv)
@@ -113,6 +112,6 @@ int main(int argc, char **argv)
     if (!localJob && send(&job, ret)) {
         return ret;
     }
-        
+
     return job.execute();
 }

@@ -27,7 +27,7 @@ public:
         deserializer >> type;
         mType = static_cast<Type>(type);
     }
-    
+
 private:
     Type mType;
 };
