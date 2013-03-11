@@ -22,15 +22,22 @@ private:
     void onProcessReadyReadStdOut(Process *process);
     void onProcessReadyReadStdErr(Process *process);
 
+    void onCompilerInfoProcessFinished(Process *process);
+
     void onTcpClientConnected();
 
-    enum { ConnectionPointer = 1 };
+    enum { ConnectionPointer = 1, CompilerPath };
     SocketServer mLocalServer, mTcpServer;
     struct ConnectionData {
         Process process;
         String stdOut, stdErr;
         Job job;
     };
+    struct Compiler {
+        Set<Path> files;
+        // flags, 32-bit, arch
+    };
+    Map<Path, Compiler> mCompilers;
     Map<Connection*, ConnectionData> mConnections;
 };
 
