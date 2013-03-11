@@ -6,6 +6,7 @@
 #include "Job.h"
 #include "Common.h"
 #include "Response.h"
+#include "GelatoMessage.h"
 
 Daemon::Daemon()
 {
@@ -31,6 +32,9 @@ bool Daemon::init()
         return true;
     if (file.exists()) {
         GelatoMessage msg(GelatoMessage::Quit);
+
+
+
         Path::rm(file);
         return mSocketServer.listenUnix(file);
     }

@@ -15,13 +15,12 @@ public:
     };
 
     enum { MessageId = 2 };
-    virtual int messageId() const { return MessageId; }
-    
-    Response(Status status, const String &error) : mStatus(status), mReturnValue(-1), mErrorText(error) {}
+
+    Response(Status status, const String &error) : Message(MessageId), mStatus(status), mReturnValue(-1), mErrorText(error) {}
     Response(int returnValue, const String &stdOut, const String &stdErr)
-        : mStatus(Success), mReturnValue(returnValue), mStdOut(stdOut), mStdErr(stdErr)
+        : Message(MessageId), mStatus(Success), mReturnValue(returnValue), mStdOut(stdOut), mStdErr(stdErr)
     {}
-    Response() : mStatus(Success), mReturnValue(-1) {}
+    Response() : Message(MessageId), mStatus(Success), mReturnValue(-1) {}
 
     Status status() const { return mStatus; }
     int returnValue() const { return mReturnValue; }
@@ -29,16 +28,12 @@ public:
     String stdOut() const { return mStdOut; }
     String stdErr() const { return mStdErr; }
 
-    String encode() const
+    virtual void encode(Serializer &serializer) const
     {
-        String out;
-        Serializer serializer(out);
         serializer << static_cast<int>(mStatus) << mReturnValue << mErrorText << mStdOut << mStdErr;
-        return out;
     }
-    void fromData(const char *data, int size)
+    virtual void decode(Deserializer &deserializer)
     {
-        Deserializer deserializer(data, size);
         int status;
         deserializer >> status >> mReturnValue >> mErrorText >> mStdOut >> mStdErr;
         mStatus = static_cast<Status>(status);

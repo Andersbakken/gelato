@@ -11,12 +11,10 @@ class Job : public Message
 {
 public:
     enum { MessageId = 1 };
-    Job() : mType(Invalid), mTimeout(-1) {}
+    Job() : Message(MessageId), mType(Invalid), mTimeout(-1) {}
 
     void clear();
     bool parse(int argc, char **argv);
-
-    virtual int messageId() const { return MessageId; }
 
     int execute() const;
 
@@ -38,8 +36,8 @@ public:
 
     Path cwd() const { return mCwd; }
 
-    String encode() const;
-    void fromData(const char *data, int size);
+    void encode(Serializer &serializer) const;
+    void decode(Deserializer &deserializer);
 private:
     List<String> mArgs;
     Path mCwd;

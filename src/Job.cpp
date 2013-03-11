@@ -109,17 +109,13 @@ int Job::execute() const
     return status;
 }
 
-String Job::encode() const
+void Job::encode(Serializer &serializer) const
 {
-    String ret;
-    Serializer serializer(ret);
     serializer << mCwd << mArgs << static_cast<int>(mType) << mCompiler << mTimeout;
-    return ret;
 }
 
-void Job::fromData(const char *data, int length)
+void Job::decode(Deserializer &deserializer)
 {
-    Deserializer deserializer(data, length);
     int type;
     deserializer >> mCwd >> mArgs >> type >> mCompiler >> mTimeout;
     mType = static_cast<Type>(type);

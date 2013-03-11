@@ -12,21 +12,15 @@ public:
         Quit
     };
     enum { MessageId = 3 };
-    GelatorMessage(Type type) : mType(type) {}
+    GelatoMessage(Type type) : Message(MessageId), mType(type) {}
     Type type() const { return mType; }
 
-    virtual int messageId() const { return MessageId; }
-
-    String encode() const
+    virtual void encode(Serializer &serializer) const
     {
-        String out;
-        Serializer serializer(out);
         serializer << static_cast<int>(mType);
-        return out;
     }
-    void fromData(const char *data, int size)
+    virtual void decode(Deserializer &deserializer)
     {
-        Deserializer deserializer(data, size);
         int type;
         deserializer >> type;
         mType = static_cast<Type>(type);
