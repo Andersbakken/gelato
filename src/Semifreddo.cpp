@@ -11,7 +11,7 @@ int main(int argc, char **argv)
     Config::registerOption("help", "Display this help", 'h');
     Config::registerOption("version", "Display version", 'V');
     Config::registerOption("verbose", "Be more verbose", 'v');
-    initLogging(Error, "log.log", 0);
+    initLogging(Config::isEnabled("verbose") ? Warning : Error, "log.log", 0);
     if (!Config::parse(argc, argv)) {
         Config::showHelp(stderr);
         return 1;

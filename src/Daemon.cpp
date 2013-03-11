@@ -14,6 +14,7 @@ Daemon::Daemon()
 
 void Daemon::onClientConnected()
 {
+    warning() << "onClientConnected";
     SocketClient *client = mSocketServer.nextClient();
     assert(client);
     Connection *conn = new Connection(client);
@@ -38,6 +39,7 @@ bool Daemon::init()
 
 void Daemon::onNewMessage(Message *message, Connection *conn)
 {
+    warning() << "onNewMessage" << message->messageId();
     switch (message->messageId()) {
     case Job::MessageId:
         handleJob(static_cast<Job*>(message), conn);
@@ -47,18 +49,15 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
 
 void Daemon::onConnectionDisconnected(Connection *conn)
 {
+    warning() << "onConnectionDisconnected";
     mConnections.remove(conn);
-    delete conn;
+    conn->deleteLater();
 }
 
 void Daemon::handleJob(Job *job, Connection *conn)
 {
-    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
-    if (it == mConnections.end()) {
-        conn->finish();
-        return;
-    }
-    ConnectionData &data = it->second;
+    warning() << "handleJob" << job->compiler() << job->arguments();
+    ConnectionData &data = mConnections[conn];
     data.job = job;
     data.process.setData(ConnectionPointer, conn);
     data.process.finished().connect(this, &Daemon::onProcessFinished);
@@ -68,7 +67,6 @@ void Daemon::handleJob(Job *job, Connection *conn)
         Response response(Response::CompilerMissing, "Couldn't find compiler: " + data.job->compiler());
         conn->send(&response);
         conn->finish();
-        return;
     }
 }
 
@@ -78,7 +76,11 @@ void Daemon::onProcessFinished(Process *process)
     Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
     assert(it != mConnections.end());
     ConnectionData &data = it->second;
-
+    data.stdOut += process->readAllStdOut();
+    data.stdErr += process->readAllStdErr();
+    Response response(process->returnCode(), data.stdOut, data.stdErr);
+    conn->send(&response);
+    conn->finish();
 }
 
 void Daemon::onReadyReadStdOut(Process *process)
@@ -96,5 +98,5 @@ void Daemon::onReadyReadStdErr(Process *process)
     Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
     assert(it != mConnections.end());
     ConnectionData &data = it->second;
-    data.stdOut += process->readAllStdErr();
+    data.stdErr += process->readAllStdErr();
 }
