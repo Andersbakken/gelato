@@ -108,6 +108,36 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
     conn->deleteLater();
 }
 
+static Path::VisitResult visitor(const Path &path, void *userData)
+{
+    Set<Path> &files = *reinterpret_cast<Set<Path> *>(userData);
+    // if (path.isSymLink()) {
+    // error() << path << "isSymLink" << path.isSymLink() << path.isDir();
+    if (path.isSymLink()) {
+        files.insert(path);
+        if (path.isFile()) {
+            Path link = path.followLink();
+            link.resolve(Path::RealPath, path.parentDir());
+            visitor(link, userData);
+        }
+    } else if (path.isDir()) {
+        if (!path.isSymLink()) {
+            return Path::Recurse;
+        } else {
+            files.insert(path);
+        }
+    } else if (path.mode() & 0111) {
+        char *buf = 0;
+        const int read = path.readAll(buf, 3);
+        if (read != 3 || strncmp(buf, "#!/", read))
+            files.insert(path);
+        delete[] buf;
+    } else if (path.contains(".so")) {
+        files.insert(path);
+    }
+    return Path::Continue;
+}
+
 void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balancing, max jobs etc
 {
     warning() << "handleJob" << job->compiler() << job->arguments() << job->path();
@@ -128,12 +158,23 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
         conn->finish();
     }
     if (!mCompilers.contains(job->compiler())) {
-        mCompilers[job->compiler()]; // make sure we only get one Process for this. Maybe blocking?
-        Process *process = new Process;
-        process->setData(CompilerPath, job->compiler());
-        process->finished().connect(this, &Daemon::onCompilerInfoProcessFinished);
-        process->start(job->compiler(), List<String>() << "-v" << "-E" << "-");
-        process->closeStdIn();
+        Process process;
+        process.exec(job->compiler(), List<String>() << "-v" << "-E" << "-", environ);
+
+        const List<String> lines = process.readAllStdErr().split('\n');
+        for (int i=0; i<lines.size(); ++i) {
+            const String &line = lines.at(i);
+            if (line.startsWith("COMPILER_PATH=")) {
+                const Set<String> paths = line.mid(14).split(':').toSet();
+                for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
+                    const Path p = Path::resolved(*it);
+                    if (p.isDir()) {
+                        p.visit(visitor, &mCompilers[job->compiler()].files);
+                    }
+                }
+            }
+        }
+        warning() << "package" << job->compiler() << mCompilers[job->compiler()].files;
     }
 }
 
@@ -172,56 +213,4 @@ void Daemon::onProcessReadyReadStdErr(Process *process)
     assert(it != mConnections.end());
     ConnectionData &data = it->second;
     data.stdErr += process->readAllStdErr();
-}
-
-static Path::VisitResult visitor(const Path &path, void *userData)
-{
-    Set<Path> &files = *reinterpret_cast<Set<Path> *>(userData);
-    // if (path.isSymLink()) {
-    // error() << path << "isSymLink" << path.isSymLink() << path.isDir();
-    if (path.isSymLink()) {
-        files.insert(path);
-        if (path.isFile()) {
-            Path link = path.followLink();
-            link.resolve(Path::RealPath, path.parentDir());
-            visitor(link, userData);
-        }
-    } else if (path.isDir()) {
-        if (!path.isSymLink()) {
-            return Path::Recurse;
-        } else {
-            files.insert(path);
-        }
-    } else if (path.mode() & 0111) {
-        char *buf = 0;
-        const int read = path.readAll(buf, 3);
-        if (read != 3 || strncmp(buf, "#!/", read))
-            files.insert(path);
-        delete[] buf;
-    } else if (path.contains(".so")) {
-        files.insert(path);
-    }
-    return Path::Continue;
-}
-
-void Daemon::onCompilerInfoProcessFinished(Process *process)
-{
-    Compiler &info = mCompilers[process->data(CompilerPath).toString()];
-
-    const List<String> lines = process->readAllStdErr().split('\n');
-    for (int i=0; i<lines.size(); ++i) {
-        const String &line = lines.at(i);
-        if (line.startsWith("COMPILER_PATH=")) {
-            const Set<String> paths = line.mid(14).split(':').toSet();
-            for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
-                const Path p = Path::resolved(*it);
-                if (p.isDir()) {
-                    p.visit(visitor, &info.files);
-                }
-            }
-        }
-    }
-    error() << info.files;
-
-    process->deleteLater();
 }

@@ -22,8 +22,6 @@ private:
     void onProcessReadyReadStdOut(Process *process);
     void onProcessReadyReadStdErr(Process *process);
 
-    void onCompilerInfoProcessFinished(Process *process);
-
     void onTcpClientConnected();
 
     enum { ConnectionPointer = 1, CompilerPath };
