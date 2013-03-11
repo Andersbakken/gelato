@@ -1,10 +1,10 @@
 #include "Common.h"
 #include "Job.h"
-#include "Response.h"
+#include "Result.h"
 #include <rct/Messages.h>
 
 void registerMessages()
 {
     Messages::registerMessage<Job>();
-    Messages::registerMessage<Response>();
+    Messages::registerMessage<Result>();
 }

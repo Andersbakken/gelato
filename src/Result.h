@@ -1,9 +1,9 @@
-#ifndef Response_h
-#define Response_h
+#ifndef Result_h
+#define Result_h
 
 #include <rct/Message.h>
 
-class Response : public Message
+class Result : public Message
 {
 public:
     enum Status {
@@ -16,11 +16,11 @@ public:
 
     enum { MessageId = 2 };
 
-    Response(Status status, const String &error) : Message(MessageId), mStatus(status), mReturnValue(-1), mErrorText(error) {}
-    Response(int returnValue, const String &stdOut, const String &stdErr)
+    Result(Status status, const String &error) : Message(MessageId), mStatus(status), mReturnValue(-1), mErrorText(error) {}
+    Result(int returnValue, const String &stdOut, const String &stdErr)
         : Message(MessageId), mStatus(Success), mReturnValue(returnValue), mStdOut(stdOut), mStdErr(stdErr)
     {}
-    Response() : Message(MessageId), mStatus(Success), mReturnValue(-1) {}
+    Result() : Message(MessageId), mStatus(Success), mReturnValue(-1) {}
 
     Status status() const { return mStatus; }
     int returnValue() const { return mReturnValue; }

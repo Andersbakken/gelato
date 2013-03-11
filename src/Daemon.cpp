@@ -5,7 +5,7 @@
 #include <rct/Path.h>
 #include "Job.h"
 #include "Common.h"
-#include "Response.h"
+#include "Result.h"
 #include "GelatoMessage.h"
 
 Daemon::Daemon()
@@ -70,7 +70,7 @@ void Daemon::handleJob(Job *job, Connection *conn)
     data.process.readyReadStdOut().connect(this, &Daemon::onReadyReadStdOut);
     data.process.readyReadStdErr().connect(this, &Daemon::onReadyReadStdErr);
     if (!data.process.start(data.job.compiler(), data.job.arguments())) {
-        Response response(Response::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
+        Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
         conn->send(&response);
         conn->finish();
     }
@@ -87,7 +87,7 @@ void Daemon::onProcessFinished(Process *process)
     warning() << "Finished job" << data.job.compiler() << String::join(data.job.arguments(), " ")
               << process->returnCode() << '\n'
               << data.stdOut << '\n' << data.stdErr;
-    Response response(process->returnCode(), data.stdOut, data.stdErr);
+    Result response(process->returnCode(), data.stdOut, data.stdErr);
     conn->send(&response);
     conn->finish();
 }

@@ -5,7 +5,7 @@
 #include <rct/Messages.h>
 #include <rct/StopWatch.h>
 #include "Job.h"
-#include "Response.h"
+#include "Result.h"
 #include "Common.h"
 #include <errno.h>
 
@@ -13,15 +13,15 @@ class Conn : public Connection
 {
 public:
     Conn(int timeout)
-        : status(Response::Timeout), returnValue(-1)
+        : status(Result::Timeout), returnValue(-1)
     {
         newMessage().connect(this, &Conn::onNewMessage);
     }
 
     void onNewMessage(Message *message, Connection *)
     {
-        assert(message->messageId() == Response::MessageId);
-        Response *response = static_cast<Response*>(message);
+        assert(message->messageId() == Result::MessageId);
+        Result *response = static_cast<Result*>(message);
         status = response->status();
         errorText = response->errorText();
         stdOut = response->stdOut();
@@ -36,7 +36,7 @@ public:
         EventLoop::instance()->exit();
     }
 
-    Response::Status status;
+    Result::Status status;
     String stdOut, stdErr, errorText;
     int returnValue;
 };
@@ -66,7 +66,7 @@ static inline int send(Job *job, bool *ok)
     if (!connection->stdErr.isEmpty())
         fprintf(stderr, "%s", connection->stdErr.constData());
     if (ok)
-        *ok = connection->status == Response::Success;
+        *ok = connection->status == Result::Success;
     return connection->returnValue;
 }
 
