@@ -50,12 +50,16 @@ static inline int send(Job *job, bool *ok)
     connection->startTimer(timeout, EventReceiver::SingleShot);
 
     if (!connection->connectToServer(Config::value<String>("socket-name"), connectTimeout)) {
-        return false;
+        if (ok)
+            *ok = false;
+        return -1;
     }
     job->setTimeout(timeout - watch.elapsed());
     registerMessages();
     if (!connection->send(job)) {
-        return false;
+        if (ok)
+            *ok = false;
+        return -1;
     }
     while (connection->isConnected()) {
         // ### timeout here?
