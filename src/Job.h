@@ -25,6 +25,7 @@ public:
         Invalid,
         Preprocess,
         Compile,
+        Link,
         Other
     };
 

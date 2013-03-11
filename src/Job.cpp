@@ -23,17 +23,21 @@ bool Job::parse(int argc, char **argv)
         return false;
     }
 
-    int dashE = -1, dashC = -1;
+    int dashE = -1, dashC = -1, dashL = -1;
     mArgs.resize(argc - 1);
     for (int i=1; i<argc; ++i) {
         if (!strcmp(argv[i], "-E")) {
             dashE = i;
         } else if (!strcmp(argv[i], "-c")) {
             dashC = i;
+        } else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "-L")) {
+            dashL = i;
         }
         mArgs[i - 1] = argv[i];
     }
-    if (dashE == -1 && dashC != -1) {
+    if (dashL != -1) {
+        mType = Link;
+    } else if (dashE == -1 && dashC != -1) {
         mType = Compile;
     } else if (dashE != -1 && dashC == -1) {
         mType = Preprocess;
@@ -41,7 +45,6 @@ bool Job::parse(int argc, char **argv)
         mType = Other;
     }
     mCwd = Path::pwd();
-    mType = dashE != -1 ? Preprocess : Compile;
     Path self = Rct::executablePath();
     const Path fileName = self.fileName();
     self.resolve();

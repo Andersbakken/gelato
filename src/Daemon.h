@@ -3,6 +3,7 @@
 
 #include <rct/SocketServer.h>
 #include <rct/Connection.h>
+#include <rct/Process.h>
 
 class Job;
 class Daemon
@@ -15,10 +16,15 @@ private:
     void onClientConnected();
     void onConnectionDisconnected(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
-    void handleJob(Job *job, Connection *conn);
+    void onProcessFinished();
 
     SocketServer mSocketServer;
-    Set<Connection*> mConnections;
+    struct ConnectionData {
+        ConnectionData() : job(0) {}
+        shared_ptr<Process> process;
+        Job *job;
+    };
+    Map<Connection*, ConnectionData> mConnections;
 };
 
 #endif

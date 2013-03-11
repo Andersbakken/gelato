@@ -13,7 +13,7 @@ class Conn : public Connection
 {
 public:
     Conn(int timeout)
-        : status(Response::Timeout)
+        : status(Response::Timeout), returnValue(-1)
     {
         newMessage().connect(this, &Conn::onNewMessage);
     }
@@ -27,6 +27,7 @@ public:
         stdOut = response->stdOut();
         stdErr = response->stdErr();
         client()->disconnect();
+        returnValue = response->returnValue();
         EventLoop::instance()->exit();
     }
 
@@ -37,6 +38,7 @@ public:
 
     Response::Status status;
     String stdOut, stdErr, errorText;
+    int returnValue;
 };
 
 static inline int send(Job *job, bool *ok)
@@ -52,14 +54,11 @@ static inline int send(Job *job, bool *ok)
     }
     job->setTimeout(timeout - watch.elapsed());
     registerMessages();
-    printf("[%s] %s:%d: if (!connection->send(job)) { [before]\n", __func__, __FILE__, __LINE__);
     if (!connection->send(job)) {
-        printf("[%s] %s:%d: if (!connection->send(job)) { [after]\n", __func__, __FILE__, __LINE__);
         return false;
     }
-    printf("[%s] %s:%d: while (connection->isConnected()) { [before]\n", __func__, __FILE__, __LINE__);
     while (connection->isConnected()) {
-        printf("[%s] %s:%d: while (connection->isConnected()) { [after]\n", __func__, __FILE__, __LINE__);
+        // ### timeout here?
         EventLoop::instance()->run();
     }
     if (!connection->stdOut.isEmpty())
@@ -68,7 +67,7 @@ static inline int send(Job *job, bool *ok)
         fprintf(stderr, "%s", connection->stdErr.constData());
     if (ok)
         *ok = connection->status == Response::Success;
-    return -1;
+    return connection->returnValue;
 }
 
 int main(int argc, char **argv)
@@ -111,9 +110,7 @@ int main(int argc, char **argv)
     }
     if (!localJob) {
         bool ok;
-        printf("[%s] %s:%d: int ret = send(&job, &ok); [before]\n", __func__, __FILE__, __LINE__);
-        int ret = send(&job, &ok);
-        printf("[%s] %s:%d: int ret = send(&job, &ok); [after]\n", __func__, __FILE__, __LINE__);
+        const int ret = send(&job, &ok);
         if (ok)
             return ret;
     }

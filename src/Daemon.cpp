@@ -14,12 +14,11 @@ Daemon::Daemon()
 
 void Daemon::onClientConnected()
 {
-    printf("[%s] %s:%d: void Daemon::onClientConnected() [after]\n", __func__, __FILE__, __LINE__);
     SocketClient *client = mSocketServer.nextClient();
     assert(client);
     Connection *conn = new Connection(client);
     conn->disconnected().connect(this, &Daemon::onConnectionDisconnected);
-    mConnections.insert(conn);
+    mConnections[conn] = ConnectionData();
     conn->newMessage().connect(this, &Daemon::onNewMessage);
 }
 
@@ -39,10 +38,14 @@ bool Daemon::init()
 
 void Daemon::onNewMessage(Message *message, Connection *conn)
 {
-    printf("[%s] %s:%d: void Daemon::onNewMessage(Message *message, Connection *conn) [after]\n", __func__, __FILE__, __LINE__);
     switch (message->messageId()) {
-    case Job::MessageId:
-        handleJob(static_cast<Job*>(message), conn);
+    case Job::MessageId: {
+        Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
+        if (it == mConnections.end()) {
+            conn->finish();
+            return;
+        }
+        it->second.job = static_cast<Job*>(message);
         break;
     }
 }
@@ -51,12 +54,10 @@ void Daemon::onConnectionDisconnected(Connection *conn)
 {
     mConnections.remove(conn);
     delete conn;
-    printf("[%s] %s:%d: void Daemon::onConnectionDestroyed(Connection *conn) [after]\n", __func__, __FILE__, __LINE__);
 }
 
 void Daemon::handleJob(Job *job, Connection *conn)
 {
-    printf("[%s] %s:%d: void Daemon::handleJob(Job *job, Connection *conn) [after]\n", __func__, __FILE__, __LINE__);
     Response response(Response::NoDaemons, "No daemons available");
     error() << "Got job" << job->arguments();
     conn->send(&response);
