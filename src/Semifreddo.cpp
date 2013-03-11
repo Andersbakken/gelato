@@ -1,6 +1,7 @@
 #include <rct/SocketServer.h>
 #include <rct/Config.h>
 #include <rct/EventLoop.h>
+#include <rct/Log.h>
 #include "Daemon.h"
 #include "Common.h"
 
@@ -10,6 +11,7 @@ int main(int argc, char **argv)
     Config::registerOption("help", "Display this help", 'h');
     Config::registerOption("version", "Display version", 'V');
     Config::registerOption("verbose", "Be more verbose", 'v');
+    initLogging(Error, "log.log", 0);
     if (!Config::parse(argc, argv)) {
         Config::showHelp(stderr);
         return 1;
