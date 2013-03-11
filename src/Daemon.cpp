@@ -70,7 +70,7 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     warning() << "onNewMessage" << message->messageId();
     switch (message->messageId()) {
     case Job::MessageId:
-        handleJob(static_cast<Job*>(message), conn);
+        startJob(static_cast<Job*>(message), conn);
         break;
     case GelatoMessage::MessageId:
         switch (static_cast<GelatoMessage*>(message)->type()) {
@@ -91,7 +91,7 @@ void Daemon::onConnectionDisconnected(Connection *conn)
     conn->deleteLater();
 }
 
-void Daemon::handleJob(Job *job, Connection *conn)
+void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balancing, max jobs etc
 {
     warning() << "handleJob" << job->compiler() << job->arguments();
     ConnectionData &data = mConnections[conn];
@@ -117,8 +117,11 @@ void Daemon::onProcessFinished(Process *process)
     data.stdOut += process->readAllStdOut();
     data.stdErr += process->readAllStdErr();
     warning() << "Finished job" << data.job.compiler() << String::join(data.job.arguments(), " ")
-              << process->returnCode() << '\n'
-              << data.stdOut << '\n' << data.stdErr;
+              << process->returnCode();
+    if (!data.stdOut.isEmpty())
+        warning() << data.stdOut;
+    if (!data.stdErr.isEmpty())
+        warning() << data.stdErr;
     Result response(process->returnCode(), data.stdOut, data.stdErr);
     conn->send(&response);
     conn->finish();

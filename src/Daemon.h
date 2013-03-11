@@ -17,7 +17,7 @@ private:
     void onClientConnected();
     void onConnectionDisconnected(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
-    void handleJob(Job *job, Connection *conn);
+    void startJob(Job *job, Connection *conn);
     void onProcessFinished(Process *process);
     void onReadyReadStdOut(Process *process);
     void onReadyReadStdErr(Process *process);
