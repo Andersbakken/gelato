@@ -30,6 +30,7 @@ bool Daemon::init()
     if (mSocketServer.listenUnix(file))
         return true;
     if (file.exists()) {
+        GelatoMessage msg(GelatoMessage::Quit);
         Path::rm(file);
         return mSocketServer.listenUnix(file);
     }
