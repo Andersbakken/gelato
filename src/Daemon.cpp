@@ -91,6 +91,9 @@ void Daemon::onNewLocalMessage(Message *message, Connection *conn)
         case GelatoMessage::Quit:
             EventLoop::instance()->exit();
             break;
+        case GelatoMessage::Stats:
+            // ### add me
+            break;
         case GelatoMessage::Invalid:
             break;
         }
