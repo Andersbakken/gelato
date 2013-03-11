@@ -83,17 +83,9 @@ List<String> Job::preprocessArguments() const
 
 int Job::execute() const
 {
-    const char* arguments[mArgs.size() + 2];
-    arguments[mArgs.size() + 1] = 0;
-    arguments[0] = mCompiler.constData();
-    // extern char **environ;
-    int ret;
-    String shit = mCompiler;
-    shit += " " + String::join(mArgs, " ");
-    return !system(shit.constData());
-    // eintrwrap(ret, execve(arguments[0], const_cast<char* const*>(arguments), const_cast<char* const*>(environ)));
-    error("execve failed somehow %d %d %s", ret, errno, strerror(errno));
-    return false;
+    String command = mCompiler;
+    command += " " + String::join(mArgs, " ");
+    return system(command.constData());
 }
 
 String Job::encode() const
