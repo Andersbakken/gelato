@@ -78,6 +78,7 @@ int main(int argc, char **argv)
     Config::registerOption("version", "Display version", 'v');
     Config::registerOption("connect-timeout", "Timeout to connect to daemon", 'c', 1000);
     Config::registerOption("timeout", "Timeout for job to finish", 't', 5000);
+    Config::parse(1, argv);
 
     if (Config::isEnabled("h")) {
         Config::showHelp(stdout);
@@ -88,6 +89,16 @@ int main(int argc, char **argv)
     }
 
     EventLoop loop;
+
+    /*
+    SocketClient client;
+    if (!client.writeTo("231.232.232.231", 8485, "some data")) {
+        error() << "unable to write multicast";
+    }
+    fflush(stdout);
+    loop.run(5000);
+    */
+
     Job job;
     if (!job.parse(argc, argv)) {
         String args;

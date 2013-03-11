@@ -21,6 +21,7 @@ Daemon::Daemon()
     signal(SIGINT, sigIntHandler);
     mLocalServer.clientConnected().connect(this, &Daemon::onLocalClientConnected);
     mTcpServer.clientConnected().connect(this, &Daemon::onTcpClientConnected);
+    mMulticastServer.dataAvailable().connect(this, &Daemon::onMulticastData);
 }
 
 Daemon::~Daemon()
@@ -28,9 +29,14 @@ Daemon::~Daemon()
     Path::rm(socketFile);
 }
 
+void Daemon::onMulticastData(SocketClient *)
+{
+    error() << "got multicast data" << mMulticastServer.readAll();
+}
+
 void Daemon::onTcpClientConnected()
 {
-
+    error() << "got tcp client";
 }
 
 void Daemon::onLocalClientConnected()
@@ -52,6 +58,19 @@ bool Daemon::init()
             mEnviron.removeAt(i);
             break;
         }
+    }
+
+    if (!mMulticastServer.receiveFrom(Config::value<int>("multicast-port"))) {
+        error() << "Can't listen for multicast on" << Config::value<int>("multicast-port");
+        return false;
+    }
+    if (!mMulticastServer.addMulticast(Config::value<String>("multicast-address"))) {
+        error() << "Unable to subscribe to" << Config::value<String>("multicast-address");
+        return false;
+    }
+    if (!mTcpServer.listenTcp(Config::value<int>("daemon-port"))) {
+        error() << "Can't listen for daemon on" << Config::value<int>("daemon-port");
+        return false;
     }
 
     registerMessages();
@@ -76,6 +95,7 @@ bool Daemon::init()
         }
 
     }
+
     return false;
 }
 

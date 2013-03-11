@@ -1,6 +1,7 @@
 #ifndef Daemon_h
 #define Daemon_h
 
+#include <rct/SocketClient.h>
 #include <rct/SocketServer.h>
 #include <rct/Connection.h>
 #include <rct/Process.h>
@@ -21,11 +22,13 @@ private:
     void onProcessFinished(Process *process);
     void onProcessReadyReadStdOut(Process *process);
     void onProcessReadyReadStdErr(Process *process);
+    void onMulticastData(SocketClient *);
 
     void onTcpClientConnected();
 
     enum { ConnectionPointer = 1, CompilerPath };
     SocketServer mLocalServer, mTcpServer;
+    SocketClient mMulticastServer;
     struct ConnectionData {
         Process process;
         String stdOut, stdErr;
