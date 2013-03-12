@@ -71,17 +71,19 @@ void Daemon::onTcpClientConnected()
 
 void Daemon::onLocalClientConnected()
 {
-    warning() << "onLocalClientConnected";
-    SocketClient *client = mLocalServer.nextClient();
-    assert(client);
-    Connection *conn = new Connection(client);
-    conn->disconnected().connect(this, &Daemon::onLocalConnectionDisconnected);
-    mConnections[conn] = ConnectionData();
-    conn->newMessage().connect(this, &Daemon::onNewLocalMessage);
+    while (SocketClient *client = mLocalServer.nextClient()) {
+        warning() << "onLocalClientConnected";
+        assert(client);
+        Connection *conn = new Connection(client);
+        conn->disconnected().connect(this, &Daemon::onLocalConnectionDisconnected);
+        conn->newMessage().connect(this, &Daemon::onNewLocalMessage);
+    }
 }
 
 bool Daemon::init()
 {
+    mMaxJobs = Config::value<int>("jobs");
+    error() << "Running with" << mMaxJobs << "jobs";
     mEnviron = Process::environment();
     for (int i = 0; i < mEnviron.size(); ++i) {
         if (mEnviron.at(i).startsWith("PATH=")) {
@@ -123,7 +125,6 @@ bool Daemon::init()
                 return true;
             }
         }
-
     }
 
     return false;
@@ -134,7 +135,7 @@ void Daemon::onNewLocalMessage(Message *message, Connection *conn)
     warning() << "onNewMessage" << message->messageId();
     switch (message->messageId()) {
     case Job::MessageId:
-        startJob(static_cast<Job*>(message), conn);
+        startJob(conn, *static_cast<Job*>(message));
         break;
     case CompilerMessage::MessageId:
         createCompiler(static_cast<CompilerMessage*>(message));
@@ -156,9 +157,20 @@ void Daemon::onNewLocalMessage(Message *message, Connection *conn)
 
 void Daemon::onLocalConnectionDisconnected(Connection *conn)
 {
-    warning() << "onConnectionDisconnected";
-    mConnections.remove(conn);
+    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
+    if (it != mConnections.end()) {
+        error() << "onConnectionDisconnected" << it->second.job.sourceFile();
+        mConnections.erase(it);
+    } else {
+        error() << "onConnectionDisconnected no connection data";
+    }
+
     conn->deleteLater();
+    if (!mPendingJobs.isEmpty() && mConnections.size() < mMaxJobs) {
+        List<std::pair<Connection*, Job> >::iterator it = mPendingJobs.begin();
+        startJob((*it).first, (*it).second);
+        mPendingJobs.erase(it);
+    }
 }
 
 static Path::VisitResult visitor(const Path &path, void *userData)
@@ -191,26 +203,26 @@ static Path::VisitResult visitor(const Path &path, void *userData)
     return Path::Continue;
 }
 
-void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balancing, max jobs etc
+void Daemon::startJob(Connection *conn, const Job &job) // ### need to do load balancing, max jobs etc
 {
-    warning() << "handleJob" << job->compiler() << job->arguments() << job->path();
+    warning() << "handleJob" << job.sourceFile();
+    debug() << job.compiler() << job.arguments() << job.path();
+    if (mConnections.size() >= mMaxJobs) {
+        mPendingJobs.append(std::make_pair(conn, job));
+        return;
+    }
     ConnectionData &data = mConnections[conn];
-    data.job = *job;
+    data.job = job;
     data.process.setData(ConnectionPointer, conn);
-    data.process.setCwd(job->cwd());
+    data.process.setCwd(job.cwd());
     data.process.finished().connect(this, &Daemon::onProcessFinished);
     data.process.readyReadStdOut().connect(this, &Daemon::onProcessReadyReadStdOut);
     data.process.readyReadStdErr().connect(this, &Daemon::onProcessReadyReadStdErr);
 
+    const Path compiler = job.compiler();
     List<String> environ = mEnviron;
-    environ += ("PATH=" + job->path());
-
-    if (!data.process.start(data.job.compiler(), data.job.arguments(), environ)) {
-        const Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
-        conn->send(&response);
-        conn->finish();
-    }
-    const Path compiler = job->compiler();
+    environ += ("PATH=" + job.path());
+    
     if (!mCompilers.contains(compiler)) {
         Compiler &c = mCompilers[compiler];
         Process process;
@@ -241,9 +253,17 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
             fclose(f);
         }
 
-        warning() << "package" << compiler << c.files << c.sha256;
-        CompilerMessage msg(compiler, c.files, c.sha256);
-        createCompiler(&msg);
+        warning() << "Created package" << compiler << c.files << c.sha256;
+        // CompilerMessage msg(compiler, c.files, c.sha256);
+        // createCompiler(&msg);
+    }
+
+    if (!data.process.start(job.compiler(), job.arguments(), environ)) {
+        const Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
+        conn->send(&response);
+        conn->finish();
+    } else {
+        error() << "Compiling" << job.sourceFile();
     }
 }
 
@@ -264,6 +284,7 @@ void Daemon::onProcessFinished(Process *process)
     Result response(process->returnCode(), data.stdOut, data.stdErr);
     conn->send(&response);
     conn->finish();
+    error() << "finished" << data.job.sourceFile();
 }
 
 void Daemon::onProcessReadyReadStdOut(Process *process)
@@ -305,4 +326,8 @@ bool Daemon::createCompiler(CompilerMessage *message)
         fclose(f);
     }
     return true;
+}
+
+void Daemon::timerEvent(TimerEvent *)
+{
 }

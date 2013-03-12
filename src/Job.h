@@ -31,6 +31,11 @@ public:
     List<String> arguments() const { return mArgs; }
     List<String> preprocessArguments() const;
 
+    List<Path> sourceFiles() const;
+    Path sourceFile(int idx = 0) const;
+
+    Path output() const { return mOutput; }
+
     void setTimeout(int ms) { mTimeout = ms; }
     int timeout() const { return mTimeout; }
 
@@ -46,6 +51,8 @@ private:
     Type mType;
     Path mCompiler;
     int mTimeout;
+    Path mOutput;
+    List<int> mSourceFiles;
 };
 
 #endif

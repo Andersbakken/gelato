@@ -37,8 +37,8 @@ int main(int argc, char **argv)
     }
 
     EventLoop loop;
-    Daemon daemon;
-    if (!daemon.init()) {
+    shared_ptr<Daemon> daemon(new Daemon);
+    if (!daemon->init()) {
         return 1;
     }
     loop.run();

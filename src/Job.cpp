@@ -9,7 +9,9 @@ void Job::clear()
     mArgs.clear();
     mType = Invalid;
     mCompiler.clear();
+    mSourceFiles.clear();
     mPath.clear();
+    mOutput.clear();
     mTimeout = -1;
 }
 
@@ -27,20 +29,67 @@ bool Job::parse(int argc, char **argv)
 
     int dashE = -1, dashC = -1, dashL = -1;
     mArgs.resize(argc - 1);
+    bool nextNotSource = false;
     for (int i=1; i<argc; ++i) {
-        if (!strcmp(argv[i], "-E")) {
-            dashE = i;
-        } else if (!strcmp(argv[i], "-c")) {
-            dashC = i;
-        } else if (!strcmp(argv[i], "-l") || !strcmp(argv[i], "-L")) {
-            dashL = i;
+        bool parsed = false;
+        if (*argv[i] == '-') {
+            parsed = true;
+            const char *opt = argv[i] + 1;
+            if (!strcmp(opt, "E")) {
+                dashE = i - 1;
+            } else if (!strcmp(opt, "c")) {
+                dashC = i - 1;
+            } else if (tolower(*opt) == 'l') {
+                if (strlen(opt) == 1)
+                    nextNotSource = true;
+                dashL = i - 1;
+            } else if (strchr("DI", *opt)) {
+                if (strlen(opt) == 1)
+                    nextNotSource = true;
+            } else if (!strncmp(opt, "o", 2)) {
+                if (strlen(opt) == 1) {
+                    if (i + 1 < argc) {
+                        nextNotSource = true;
+                        mOutput = argv[i + 1];
+                    }
+                } else {
+                    mOutput = opt + 1;
+                }
+            } else if (!strcmp(opt, "Xassembler")
+                       || !strcmp(opt, "Xlinker")
+                       || !strcmp(opt, "wrapper")
+                       || !strcmp(opt, "aux-info")
+                       || !strcmp(opt, "param")
+                       || !strcmp(opt, "idirafter")
+                       || !strcmp(opt, "iprefix")
+                       || !strcmp(opt, "iwithprefix")
+                       || !strcmp(opt, "iwithprefixbefore")
+                       || !strcmp(opt, "isysroot")
+                       || !strcmp(opt, "imultilib")
+                       || !strcmp(opt, "isystem")
+                       || !strcmp(opt, "iquote")
+                       || !strcmp(opt, "x")
+                       || !strcmp(opt, "u")
+                       || !strcmp(opt, "G")
+                       || !strcmp(opt, "T")) {
+                nextNotSource = true;
+            } else {
+                parsed = false;
+            }
+        }
+        if (!parsed) {
+            if (nextNotSource) {
+                nextNotSource = false;
+            } else if (Path::exists(argv[i])) {
+                mSourceFiles.append(i - 1);
+            }
         }
         mArgs[i - 1] = argv[i];
     }
-    if (dashL != -1) {
-        mType = Link;
-    } else if (dashE == -1 && dashC != -1) {
+    if (dashE == -1 && dashC != -1) {
         mType = Compile;
+    } else if (dashL != -1) {
+        mType = Link;
     } else if (dashE != -1 && dashC == -1) {
         mType = Preprocess;
     } else {
@@ -113,12 +162,28 @@ int Job::execute() const
 
 void Job::encode(Serializer &serializer) const
 {
-    serializer << mCwd << mPath << mArgs << static_cast<int>(mType) << mCompiler << mTimeout;
+    serializer << mCwd << mPath << mArgs << static_cast<int>(mType) << mCompiler << mTimeout
+               << mOutput << mSourceFiles;
 }
 
 void Job::decode(Deserializer &deserializer)
 {
     int type;
-    deserializer >> mCwd >> mPath >> mArgs >> type >> mCompiler >> mTimeout;
+    deserializer >> mCwd >> mPath >> mArgs >> type >> mCompiler >> mTimeout
+                 >> mOutput >> mSourceFiles;
     mType = static_cast<Type>(type);
+}
+
+Path Job::sourceFile(int idx) const
+{
+    return mArgs.value(mSourceFiles.value(idx, -1));
+}
+
+List<Path> Job::sourceFiles() const
+{
+    List<Path> ret(mSourceFiles.size());
+    for (int i=0; i<mSourceFiles.size(); ++i) {
+        ret[i] = mArgs.value(mSourceFiles.at(i), -1);
+    }
+    return ret;
 }
