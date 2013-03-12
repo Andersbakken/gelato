@@ -102,6 +102,12 @@ int Job::execute() const
     Process process;
     process.setCwd(mCwd);
     process.exec(mCompiler, mArgs);
+    const String out = process.readAllStdOut();
+    if (!out.isEmpty())
+        fprintf(stdout, out.constData());
+    const String err = process.readAllStdErr();
+    if (!err.isEmpty())
+        fprintf(stderr, err.constData());
     return process.returnCode();
     // String command = mCompiler;
     // for (int i=0; i<mArgs.size(); ++i) {
