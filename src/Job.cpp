@@ -109,26 +109,6 @@ int Job::execute() const
     if (!err.isEmpty())
         fprintf(stderr, "%s", err.constData());
     return process.returnCode();
-    // String command = mCompiler;
-    // for (int i=0; i<mArgs.size(); ++i) {
-    //     command += ' ';
-    //     const String &arg = mArgs.at(i);
-    //     const bool hasSpace = arg.contains(' ');
-    //     if (hasSpace)
-    //         command += '"';
-
-    //     for (int j=0; j<arg.size(); ++j) {
-    //         if (arg.at(j) == '"')
-    //             command.append('\\');
-    //         command.append(arg.at(j));
-    //     }
-    //     if (hasSpace)
-    //         command += '"';
-    // }
-
-    // const int ret = system(command.constData());
-    // const int status = WEXITSTATUS(ret);
-    // return status;
 }
 
 void Job::encode(Serializer &serializer) const
