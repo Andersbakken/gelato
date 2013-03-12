@@ -206,6 +206,7 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
                 sha.update(buf, r);
             }
             c.sha256 = sha.hash(SHA256::Hex);
+            fclose(f);
         }
 
         warning() << "package" << compiler << c.files << c.sha256;
