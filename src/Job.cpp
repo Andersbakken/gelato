@@ -104,10 +104,10 @@ int Job::execute() const
     process.exec(mCompiler, mArgs);
     const String out = process.readAllStdOut();
     if (!out.isEmpty())
-        fprintf(stdout, out.constData());
+        fprintf(stdout, "%s", out.constData());
     const String err = process.readAllStdErr();
     if (!err.isEmpty())
-        fprintf(stderr, err.constData());
+        fprintf(stderr, "%s", err.constData());
     return process.returnCode();
     // String command = mCompiler;
     // for (int i=0; i<mArgs.size(); ++i) {
