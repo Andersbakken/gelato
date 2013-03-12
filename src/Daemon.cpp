@@ -4,10 +4,12 @@
 #include <rct/SHA256.h>
 #include <rct/Messages.h>
 #include <rct/Path.h>
+#include <rct/Rct.h>
 #include "Job.h"
 #include "Common.h"
 #include "Result.h"
 #include "GelatoMessage.h"
+#include "CompilerMessage.h"
 #include <signal.h>
 
 Path socketFile;
@@ -106,6 +108,9 @@ void Daemon::onNewLocalMessage(Message *message, Connection *conn)
     switch (message->messageId()) {
     case Job::MessageId:
         startJob(static_cast<Job*>(message), conn);
+        break;
+    case CompilerMessage::MessageId:
+        createCompiler(static_cast<CompilerMessage*>(message));
         break;
     case GelatoMessage::MessageId:
         switch (static_cast<GelatoMessage*>(message)->type()) {
@@ -248,4 +253,26 @@ void Daemon::onProcessReadyReadStdErr(Process *process)
     assert(it != mConnections.end());
     ConnectionData &data = it->second;
     data.stdErr += process->readAllStdErr();
+}
+bool Daemon::createCompiler(CompilerMessage *message)
+{
+    Path path = String::format<256>("%s/compiler_%s", Rct::executablePath().parentDir().constData(), message->sha256().constData());
+    Path::mkdir(path, Path::Recursive);
+    const Map<Path, String> &paths = message->paths();
+
+    for (Map<Path, String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
+        Path abs = path + it->first;
+        if (!Path::mkdir(abs.parentDir(), Path::Recursive)) {
+            error("Couldn't create directory %s", abs.parentDir().constData());
+        }
+        FILE *f = fopen(abs.constData(), "w");
+        if (!f) {
+            error("Couldn't create file %s", abs.constData());
+            continue;
+        }
+        if (!fwrite(it->second.constData(), it->second.size(), 1, f)) {
+            error() << "Write error" << abs;
+        }
+        fclose(f);
+    }
 }

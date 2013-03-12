@@ -7,6 +7,7 @@
 #include <rct/Process.h>
 #include "Job.h"
 
+class CompilerMessage;
 class Daemon
 {
 public:
@@ -19,6 +20,7 @@ private:
     void onLocalConnectionDisconnected(Connection *connection);
     void onNewLocalMessage(Message *message, Connection *connection);
     void startJob(Job *job, Connection *conn);
+    bool createCompiler(CompilerMessage *message);
     void onProcessFinished(Process *process);
     void onProcessReadyReadStdOut(Process *process);
     void onProcessReadyReadStdErr(Process *process);
