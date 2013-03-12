@@ -100,17 +100,21 @@ int Job::execute() const
 {
     String command = mCompiler;
     for (int i=0; i<mArgs.size(); ++i) {
-        command.append(' ');
-
+        command += ' ';
         const String &arg = mArgs.at(i);
-        if (arg.contains(' ')) {
-            command.append('"');
-            command.append(arg);
-            command.append('"');
-        } else {
-            command.append(arg);
+        const bool hasSpace = arg.contains(' ');
+        if (hasSpace)
+            command += '"';
+
+        for (int j=0; j<arg.size(); ++j) {
+            if (arg.at(j) == '"')
+                command.append('\\');
+            command.append(arg.at(j));
         }
+        if (hasSpace)
+            command += '"';
     }
+
     const int ret = system(command.constData());
     const int status = WEXITSTATUS(ret);
     return status;
