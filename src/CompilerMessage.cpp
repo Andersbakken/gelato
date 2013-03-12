@@ -5,16 +5,20 @@ CompilerMessage::CompilerMessage(const Path &compiler, const Set<Path> &paths, c
     : Message(MessageId), mCompiler(compiler), mSha256(sha256)
 {
     for (Set<Path>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
-        mPaths[*it] = it->readAll();
+        if (it->isSymLink()) {
+            mLinks[*it] = it->followLink();
+        } else {
+            mFiles[*it] = it->readAll();
+        }
     }
 }
 
 void CompilerMessage::encode(Serializer &serializer) const
 {
-    serializer << mCompiler << mSha256 << mPaths;
+    serializer << mCompiler << mSha256 << mFiles;
 }
 
 void CompilerMessage::decode(Deserializer &deserializer)
 {
-    deserializer >> mCompiler >> mSha256 >> mPaths;
+    deserializer >> mCompiler >> mSha256 >> mFiles;
 }

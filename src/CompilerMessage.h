@@ -15,10 +15,12 @@ public:
     virtual void decode(Deserializer &deserializer);
     Path compiler() const { return mCompiler; }
     String sha256() const { return mSha256; }
-    const Map<Path, String> &paths() const { return mPaths; }
+    const Map<Path, String> &paths() const { return mFiles; }
+    const Map<Path, Path> &links() const { return mLinks; }
 private:
     Path mCompiler;
-    Map<Path, String> mPaths;
+    Map<Path, String> mFiles;
+    Map<Path, Path> mLinks;
     String mSha256;
 };
 

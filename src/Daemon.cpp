@@ -215,6 +215,8 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
         }
 
         warning() << "package" << compiler << c.files << c.sha256;
+        CompilerMessage msg(compiler, c.files, c.sha256);
+        createCompiler(&msg);
     }
 }
 
@@ -268,11 +270,12 @@ bool Daemon::createCompiler(CompilerMessage *message)
         FILE *f = fopen(abs.constData(), "w");
         if (!f) {
             error("Couldn't create file %s", abs.constData());
-            continue;
+            return false;
         }
         if (!fwrite(it->second.constData(), it->second.size(), 1, f)) {
             error() << "Write error" << abs;
         }
         fclose(f);
     }
+    return true;
 }
