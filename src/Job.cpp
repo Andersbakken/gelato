@@ -100,6 +100,7 @@ List<String> Job::preprocessArguments() const
 int Job::execute() const
 {
     Process process;
+    process.setCwd(mCwd);
     process.exec(mCompiler, mArgs);
     return process.returnCode();
     // String command = mCompiler;
