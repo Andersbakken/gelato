@@ -24,9 +24,12 @@ private:
     void onProcessFinished(Process *process);
     void onProcessReadyReadStdOut(Process *process);
     void onProcessReadyReadStdErr(Process *process);
-    void onMulticastData(SocketClient *);
+
+    void onMulticastData(SocketClient *, String host, uint16_t port, String data);
 
     void onTcpClientConnected();
+    void onTcpConnectionDisconnected(Connection *connection);
+    void onNewTcpMessage(Message *message, Connection *connection);
 
     enum { ConnectionPointer = 1, CompilerPath };
     SocketServer mLocalServer, mTcpServer;
@@ -44,6 +47,7 @@ private:
     Map<Path, Compiler> mCompilers;
     List<String> mEnviron;
     Map<Connection*, ConnectionData> mConnections;
+    Map<String, Connection*> mDaemons;
 };
 
 #endif

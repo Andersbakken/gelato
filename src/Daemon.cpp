@@ -24,7 +24,7 @@ Daemon::Daemon()
     signal(SIGINT, sigIntHandler);
     mLocalServer.clientConnected().connect(this, &Daemon::onLocalClientConnected);
     mTcpServer.clientConnected().connect(this, &Daemon::onTcpClientConnected);
-    mMulticastServer.dataAvailable().connect(this, &Daemon::onMulticastData);
+    mMulticastServer.udpDataAvailable().connect(this, &Daemon::onMulticastData);
 }
 
 Daemon::~Daemon()
@@ -32,14 +32,41 @@ Daemon::~Daemon()
     Path::rm(socketFile);
 }
 
-void Daemon::onMulticastData(SocketClient *)
+void Daemon::onMulticastData(SocketClient *, String host, uint16_t port, String data)
 {
-    error() << "got multicast data" << mMulticastServer.readAll();
+    error() << "got multicast data" << host << port << data;
+}
+
+void Daemon::onTcpConnectionDisconnected(Connection* connection)
+{
+    const String remote = connection->client()->remoteAddress();
+    mDaemons.remove(remote);
+    connection->deleteLater();
+}
+
+void Daemon::onNewTcpMessage(Message *message, Connection *connection)
+{
+    error() << "got new tcp message";
 }
 
 void Daemon::onTcpClientConnected()
 {
     error() << "got tcp client";
+    SocketClient* client;
+    while ((client = mTcpServer.nextClient())) {
+        const String remote = client->remoteAddress();
+        if (mDaemons.contains(remote)) {
+            // we already have a connection from this host, ignore
+            // ### allow multiple connections (multiple daemons?) from the same host?
+            client->deleteLater();
+            return;
+        }
+
+        Connection* conn = new Connection(client);
+        conn->disconnected().connect(this, &Daemon::onTcpConnectionDisconnected);
+        conn->newMessage().connect(this, &Daemon::onNewTcpMessage);
+        mDaemons[remote] = conn;
+    }
 }
 
 void Daemon::onLocalClientConnected()
