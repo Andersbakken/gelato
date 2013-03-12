@@ -1,6 +1,7 @@
 #include "Job.h"
 #include <rct/Rct.h>
 #include <rct/Serializer.h>
+#include <rct/Process.h>
 
 void Job::clear()
 {
@@ -98,26 +99,29 @@ List<String> Job::preprocessArguments() const
 
 int Job::execute() const
 {
-    String command = mCompiler;
-    for (int i=0; i<mArgs.size(); ++i) {
-        command += ' ';
-        const String &arg = mArgs.at(i);
-        const bool hasSpace = arg.contains(' ');
-        if (hasSpace)
-            command += '"';
+    Process process;
+    process.exec(mCompiler, mArgs);
+    return process.returnCode();
+    // String command = mCompiler;
+    // for (int i=0; i<mArgs.size(); ++i) {
+    //     command += ' ';
+    //     const String &arg = mArgs.at(i);
+    //     const bool hasSpace = arg.contains(' ');
+    //     if (hasSpace)
+    //         command += '"';
 
-        for (int j=0; j<arg.size(); ++j) {
-            if (arg.at(j) == '"')
-                command.append('\\');
-            command.append(arg.at(j));
-        }
-        if (hasSpace)
-            command += '"';
-    }
+    //     for (int j=0; j<arg.size(); ++j) {
+    //         if (arg.at(j) == '"')
+    //             command.append('\\');
+    //         command.append(arg.at(j));
+    //     }
+    //     if (hasSpace)
+    //         command += '"';
+    // }
 
-    const int ret = system(command.constData());
-    const int status = WEXITSTATUS(ret);
-    return status;
+    // const int ret = system(command.constData());
+    // const int status = WEXITSTATUS(ret);
+    // return status;
 }
 
 void Job::encode(Serializer &serializer) const
