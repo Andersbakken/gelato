@@ -1,6 +1,7 @@
 #include "Daemon.h"
 #include <rct/SocketClient.h>
 #include <rct/Config.h>
+#include <rct/SHA256.h>
 #include <rct/Messages.h>
 #include <rct/Path.h>
 #include "Job.h"
@@ -177,9 +178,11 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
         conn->send(&response);
         conn->finish();
     }
-    if (!mCompilers.contains(job->compiler())) {
+    const Path compiler = job->compiler();
+    if (!mCompilers.contains(compiler)) {
+        Compiler &c = mCompilers[compiler];
         Process process;
-        process.exec(job->compiler(), List<String>() << "-v" << "-E" << "-", environ);
+        process.exec(compiler, List<String>() << "-v" << "-E" << "-", environ);
 
         const List<String> lines = process.readAllStdErr().split('\n');
         for (int i=0; i<lines.size(); ++i) {
@@ -189,12 +192,23 @@ void Daemon::startJob(Job *job, Connection *conn) // ### need to do load balanci
                 for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
                     const Path p = Path::resolved(*it);
                     if (p.isDir()) {
-                        p.visit(visitor, &mCompilers[job->compiler()].files);
+                        p.visit(visitor, &c.files);
                     }
                 }
             }
         }
-        warning() << "package" << job->compiler() << mCompilers[job->compiler()].files;
+        FILE *f = fopen(compiler.constData(), "r");
+        if (f) {
+            char buf[1024];
+            int r;
+            SHA256 sha;
+            while ((r = fread(buf, sizeof(char), sizeof(buf), f)) > 0) {
+                sha.update(buf, r);
+            }
+            c.sha256 = sha.hash(SHA256::Hex);
+        }
+
+        warning() << "package" << compiler << c.files << c.sha256;
     }
 }
 

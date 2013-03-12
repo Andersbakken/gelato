@@ -35,6 +35,7 @@ private:
         Job job;
     };
     struct Compiler {
+        String sha256;
         Set<Path> files;
         // flags, 32-bit, arch
     };
