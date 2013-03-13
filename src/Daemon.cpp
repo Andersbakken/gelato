@@ -15,6 +15,7 @@
 #define DEBUGMULTICAST
 
 static void* Announce = &Announce;
+Daemon *Daemon::sInstance = 0;
 
 Path socketFile;
 static void sigIntHandler(int)
@@ -25,6 +26,8 @@ static void sigIntHandler(int)
 
 Daemon::Daemon()
 {
+    assert(!sInstance);
+    sInstance = 0;
     signal(SIGINT, sigIntHandler);
     mLocalServer.clientConnected().connect(this, &Daemon::onLocalClientConnected);
     mTcpServer.clientConnected().connect(this, &Daemon::onTcpClientConnected);
@@ -36,6 +39,8 @@ Daemon::Daemon()
 
 Daemon::~Daemon()
 {
+    assert(sInstance == this);
+    sInstance = 0;
     Path::rm(socketFile);
 }
 
@@ -204,6 +209,8 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
         case GelatoMessage::CompilerRequest:
             break;
         case GelatoMessage::JobRequest:
+            break;
+        case GelatoMessage::Kill:
             break;
         }
         break;
@@ -388,6 +395,8 @@ void Daemon::onProcessReadyReadStdErr(Process *process)
     ConnectionData &data = it->second;
     data.stdErr += process->readAllStdErr();
 }
+
+// ### maybe cache this for a little while
 bool Daemon::createCompiler(CompilerMessage *message)
 {
     Path path = String::format<256>("%s/compiler_%s", Rct::executablePath().parentDir().constData(), message->sha256().constData());

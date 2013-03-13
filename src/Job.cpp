@@ -1,10 +1,11 @@
 #include "Job.h"
 #include "GelatoMessage.h"
+#include "Daemon.h"
 #include <rct/Process.h>
 #include <rct/Connection.h>
 
 Job::Job(const JobMessage& message, Connection* source)
-    : mMsg(message), mSource(source), mType(Pending)
+    : mMsg(message), mSource(source), mType(Pending), mReturnCode(-1), mFinished(false)
 {
     source->connected().connect(this, &Job::sourceDisconnected);
 }
@@ -26,6 +27,14 @@ void Job::startLocal()
         kill();
     // ...
     mType = Local;
+    mData.process = new Process;
+    mData.process->setCwd(mMsg.cwd());
+    mData.process->finished().connect(this, &Job::onProcessFinished);
+    List<String> environ = Daemon::instance()->defaultEnvironment();
+    environ += ("PATH=" + mMsg.path());
+    if (!mData.process->start(mMsg.compiler(), mMsg.arguments(), environ)) {
+
+    }
 }
 
 void Job::startRemote(Connection* conn)
@@ -52,4 +61,20 @@ void Job::kill()
         break; }
     }
     mType = Pending;
+}
+
+void Job::onProcessFinished(Process *process)
+{
+    assert(process == mData.process);
+    mStdOut += process->readAllStdOut();
+    mStdErr += process->readAllStdErr();
+    mReturnCode = process->returnCode();
+    mData.process = 0;
+    mData.process->deleteLater();
+    // warning() << "Finished job" << data.job.compiler() << String::join(data.job.arguments(), " ")
+    //           << process->returnCode();
+    // Result response(process->returnCode(), data.stdOut, data.stdErr);
+    // conn->send(&response);
+    // conn->finish();
+    // error() << "finished" << data.job.sourceFile();
 }

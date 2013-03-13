@@ -23,9 +23,10 @@ public:
     void kill();
     void setPending();
 
+    bool isFinished() const { return mFinished; }
 private:
     void sourceDisconnected(Connection*);
-
+    void onProcessFinished(Process *process);
 private:
     JobMessage mMsg;
     Connection* mSource;
@@ -34,6 +35,10 @@ private:
         Process* process;
         Connection* destination;
     } mData;
+
+    String mStdOut, mStdErr;
+    int mReturnCode;
+    bool mFinished;
 };
 
 #endif

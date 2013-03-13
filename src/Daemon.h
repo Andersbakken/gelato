@@ -17,6 +17,9 @@ public:
 
     signalslot::Signal0 &jobFinished() { return mJobFinished; }
     void timerEvent(TimerEvent *e);
+
+    static Daemon *instance() { return sInstance; }
+    List<String> defaultEnvironment() const { return mEnviron; }
 private:
     void onLocalClientConnected();
     void onLocalConnectionDisconnected(Connection *connection);
@@ -72,6 +75,8 @@ private:
     Timer mAnnounceTimer;
 
     signalslot::Signal0 mJobFinished;
+
+    static Daemon *sInstance;
 };
 
 #endif
