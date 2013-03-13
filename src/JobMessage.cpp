@@ -15,7 +15,7 @@ void JobMessage::clear()
     mTimeout = -1;
 }
 
-static const char* guessType(const String& filename)
+static inline const char* guessType(const String& filename)
 {
     Path p(filename);
     const char* ext = p.extension();
