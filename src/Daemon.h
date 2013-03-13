@@ -5,7 +5,7 @@
 #include <rct/SocketServer.h>
 #include <rct/Connection.h>
 #include <rct/Process.h>
-#include "Job.h"
+#include "JobMessage.h"
 
 class CompilerMessage;
 class Daemon : public EventReceiver
@@ -20,8 +20,8 @@ public:
 private:
     void onLocalClientConnected();
     void onLocalConnectionDisconnected(Connection *connection);
-    void onNewLocalMessage(Message *message, Connection *connection);
-    void startJob(Connection *conn, const Job &job);
+    void onNewMessage(Message *message, Connection *connection);
+    void startJob(Connection *conn, const JobMessage &job);
     bool createCompiler(CompilerMessage *message);
     void onProcessFinished(Process *process);
     void onProcessReadyReadStdOut(Process *process);
@@ -29,27 +29,47 @@ private:
     void onMulticastData(SocketClient *, String host, uint16_t port, String data);
     void onTcpClientConnected();
     void onTcpConnectionDisconnected(Connection *connection);
-    void onNewTcpMessage(Message *message, Connection *connection);
+
+    void announceJobs();
+    void requestCompiler(Connection*, const String& sha256);
+    void requestJob(Connection*, const String& sha256);
+    Connection* connection(const String& host, uint16_t port);
+
+    void writeMulticast(const String& data);
 
     enum { ConnectionPointer = 1, CompilerPath };
     SocketServer mLocalServer, mTcpServer;
-    SocketClient mMulticastServer;
+    SocketClient mMulticast;
     struct ConnectionData {
         Process process;
         String stdOut, stdErr;
-        Job job;
+        JobMessage job;
     };
     Map<Connection*, ConnectionData> mConnections;
-    List<std::pair<Connection*, Job> > mPendingJobs;
+
+    struct PendingJob {
+        Connection* conn;
+        JobMessage job;
+    };
+    Map<String, List<PendingJob> > mPendingJobs;
+
     struct Compiler {
         String sha256;
         Set<Path> files;
         // flags, 32-bit, arch
     };
     Map<Path, Compiler> mCompilers;
+    Map<String, Path> mShaToCompiler;
     List<String> mEnviron;
-    Map<String, Connection*> mDaemons;
+
+    struct RemoteData {
+        Connection* conn;
+    };
+
+    Map<String, RemoteData> mDaemons;
     int mMaxJobs;
+
+    Timer mAnnounceTimer;
 
     signalslot::Signal0 mJobFinished;
 };

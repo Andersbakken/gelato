@@ -4,7 +4,7 @@
 #include <rct/Config.h>
 #include <rct/Messages.h>
 #include <rct/StopWatch.h>
-#include "Job.h"
+#include "JobMessage.h"
 #include "Result.h"
 #include "Common.h"
 #include <errno.h>
@@ -41,7 +41,7 @@ public:
     int returnValue;
 };
 
-static inline bool send(Job *job, int &returnCode)
+static inline bool send(JobMessage *job, int &returnCode)
 {
     returnCode = -1;
     StopWatch watch;
@@ -99,7 +99,7 @@ int main(int argc, char **argv)
     loop.run(5000);
     */
 
-    Job job;
+    JobMessage job;
     if (!job.parse(argc, argv)) {
         String args;
         for (int i=0; i<argc; ++i) {
@@ -112,7 +112,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    bool localJob = job.type() != Job::Compile;
+    bool localJob = job.type() != JobMessage::Compile;
     if (!localJob) {
         char *disabled = getenv("STRACCIATELLA_DISABLED");
         if (disabled && !strcmp(disabled, "1")) {

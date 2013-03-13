@@ -1,58 +1,39 @@
 #ifndef Job_h
 #define Job_h
 
-#include <rct/List.h>
-#include <rct/String.h>
-#include <rct/Path.h>
-#include <rct/Serializer.h>
-#include <rct/Message.h>
+#include "JobMessage.h"
+#include <rct/EventReceiver.h>
 
-class Job : public Message
+class Connection;
+class Process;
+
+class Job : public EventReceiver
 {
 public:
-    enum { MessageId = 1 };
-    Job() : Message(MessageId), mType(Invalid), mTimeout(-1) {}
+    enum Type { Pending, Local, Remote };
 
-    void clear();
-    bool parse(int argc, char **argv);
+    Job(const JobMessage& message, Connection* source);
+    ~Job();
 
-    int execute() const;
-
-    Path compiler() const { return mCompiler; }
-    enum Type {
-        Invalid,
-        Preprocess,
-        Compile,
-        Link,
-        Other
-    };
+    void startLocal();
+    void startRemote(Connection* destination);
 
     Type type() const { return mType; }
-    List<String> arguments() const { return mArgs; }
-    List<String> preprocessArguments() const;
 
-    List<Path> sourceFiles() const;
-    Path sourceFile(int idx = 0) const;
+    void kill();
+    void setPending();
 
-    Path output() const { return mOutput; }
-
-    void setTimeout(int ms) { mTimeout = ms; }
-    int timeout() const { return mTimeout; }
-
-    Path cwd() const { return mCwd; }
-    String path() const { return mPath; }
-
-    void encode(Serializer &serializer) const;
-    void decode(Deserializer &deserializer);
 private:
-    List<String> mArgs;
-    Path mCwd;
-    String mPath;
+    void sourceDisconnected(Connection*);
+
+private:
+    JobMessage mMsg;
+    Connection* mSource;
     Type mType;
-    Path mCompiler;
-    int mTimeout;
-    Path mOutput;
-    List<int> mSourceFiles;
+    union {
+        Process* process;
+        Connection* destination;
+    } mData;
 };
 
 #endif

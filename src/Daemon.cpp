@@ -5,12 +5,16 @@
 #include <rct/Messages.h>
 #include <rct/Path.h>
 #include <rct/Rct.h>
-#include "Job.h"
+#include "JobMessage.h"
 #include "Common.h"
 #include "Result.h"
 #include "GelatoMessage.h"
 #include "CompilerMessage.h"
 #include <signal.h>
+
+#define DEBUGMULTICAST
+
+static void* Announce = &Announce;
 
 Path socketFile;
 static void sigIntHandler(int)
@@ -24,7 +28,10 @@ Daemon::Daemon()
     signal(SIGINT, sigIntHandler);
     mLocalServer.clientConnected().connect(this, &Daemon::onLocalClientConnected);
     mTcpServer.clientConnected().connect(this, &Daemon::onTcpClientConnected);
-    mMulticastServer.udpDataAvailable().connect(this, &Daemon::onMulticastData);
+    mMulticast.udpDataAvailable().connect(this, &Daemon::onMulticastData);
+#ifdef DEBUGMULTICAST
+    mMulticast.setMulticastLoop();
+#endif
 }
 
 Daemon::~Daemon()
@@ -35,6 +42,54 @@ Daemon::~Daemon()
 void Daemon::onMulticastData(SocketClient *, String host, uint16_t port, String data)
 {
     error() << "got multicast data" << host << port << data;
+    Deserializer deserializer(data.data(), data.size());
+    String sha256;
+    uint16_t tcpPort;
+    deserializer >> sha256 >> tcpPort;
+    error() << "got sha" << sha256 << tcpPort;
+
+    // check if I have the compiler
+    const Map<String, Path>::const_iterator compiler = mShaToCompiler.find(sha256);
+    if (compiler == mShaToCompiler.end()) { // no, request it
+        Connection* conn = connection(host, tcpPort);
+        if (conn)
+            requestCompiler(conn, sha256);
+    } else if (mConnections.size() < mMaxJobs) {
+        // yes, check if I have room to run a job
+        Connection* conn = connection(host, tcpPort);
+        if (conn)
+            requestJob(conn, sha256);
+    }
+}
+
+Connection* Daemon::connection(const String& host, uint16_t port)
+{
+    const Map<String, RemoteData>::const_iterator it = mDaemons.find(host);
+    if (it != mDaemons.end())
+        return it->second.conn;
+    SocketClient* client = new SocketClient;
+    if (client->connectTcp(host, port)) {
+        Connection* conn = new Connection(client);
+        conn->disconnected().connect(this, &Daemon::onTcpConnectionDisconnected);
+        conn->newMessage().connect(this, &Daemon::onNewMessage);
+        RemoteData remote = { conn };
+        mDaemons[host] = remote;
+        return conn;
+    }
+    delete client;
+    return 0;
+}
+
+void Daemon::requestJob(Connection* conn, const String& sha256)
+{
+    GelatoMessage msg(GelatoMessage::JobRequest, sha256);
+    conn->send(&msg);
+}
+
+void Daemon::requestCompiler(Connection* conn, const String& sha256)
+{
+    GelatoMessage msg(GelatoMessage::CompilerRequest, sha256);
+    conn->send(&msg);
 }
 
 void Daemon::onTcpConnectionDisconnected(Connection* connection)
@@ -42,11 +97,6 @@ void Daemon::onTcpConnectionDisconnected(Connection* connection)
     const String remote = connection->client()->remoteAddress();
     mDaemons.remove(remote);
     connection->deleteLater();
-}
-
-void Daemon::onNewTcpMessage(Message *message, Connection *connection)
-{
-    error() << "got new tcp message";
 }
 
 void Daemon::onTcpClientConnected()
@@ -64,8 +114,9 @@ void Daemon::onTcpClientConnected()
 
         Connection* conn = new Connection(client);
         conn->disconnected().connect(this, &Daemon::onTcpConnectionDisconnected);
-        conn->newMessage().connect(this, &Daemon::onNewTcpMessage);
-        mDaemons[remote] = conn;
+        conn->newMessage().connect(this, &Daemon::onNewMessage);
+        RemoteData remoteData = { conn };
+        mDaemons[remote] = remoteData;
     }
 }
 
@@ -76,7 +127,7 @@ void Daemon::onLocalClientConnected()
         assert(client);
         Connection *conn = new Connection(client);
         conn->disconnected().connect(this, &Daemon::onLocalConnectionDisconnected);
-        conn->newMessage().connect(this, &Daemon::onNewLocalMessage);
+        conn->newMessage().connect(this, &Daemon::onNewMessage);
     }
 }
 
@@ -92,11 +143,11 @@ bool Daemon::init()
         }
     }
 
-    if (!mMulticastServer.receiveFrom(Config::value<int>("multicast-port"))) {
+    if (!mMulticast.receiveFrom(Config::value<int>("multicast-port"))) {
         error() << "Can't listen for multicast on" << Config::value<int>("multicast-port");
         return false;
     }
-    if (!mMulticastServer.addMulticast(Config::value<String>("multicast-address"))) {
+    if (!mMulticast.addMulticast(Config::value<String>("multicast-address"))) {
         error() << "Unable to subscribe to" << Config::value<String>("multicast-address");
         return false;
     }
@@ -130,12 +181,12 @@ bool Daemon::init()
     return false;
 }
 
-void Daemon::onNewLocalMessage(Message *message, Connection *conn)
+void Daemon::onNewMessage(Message *message, Connection *conn)
 {
     warning() << "onNewMessage" << message->messageId();
     switch (message->messageId()) {
-    case Job::MessageId:
-        startJob(conn, *static_cast<Job*>(message));
+    case JobMessage::MessageId:
+        startJob(conn, *static_cast<JobMessage*>(message));
         break;
     case CompilerMessage::MessageId:
         createCompiler(static_cast<CompilerMessage*>(message));
@@ -149,6 +200,10 @@ void Daemon::onNewLocalMessage(Message *message, Connection *conn)
             // ### add me
             break;
         case GelatoMessage::Invalid:
+            break;
+        case GelatoMessage::CompilerRequest:
+            break;
+        case GelatoMessage::JobRequest:
             break;
         }
         break;
@@ -167,9 +222,10 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
 
     conn->deleteLater();
     if (!mPendingJobs.isEmpty() && mConnections.size() < mMaxJobs) {
-        List<std::pair<Connection*, Job> >::iterator it = mPendingJobs.begin();
-        startJob((*it).first, (*it).second);
-        mPendingJobs.erase(it);
+#warning fixme
+        //        List<std::pair<Connection*, JobMessage> >::iterator it = mPendingJobs.begin();
+        //startJob((*it).first, (*it).second);
+        //mPendingJobs.erase(it);
     }
 }
 
@@ -203,26 +259,38 @@ static Path::VisitResult visitor(const Path &path, void *userData)
     return Path::Continue;
 }
 
-void Daemon::startJob(Connection *conn, const Job &job) // ### need to do load balancing, max jobs etc
+void Daemon::writeMulticast(const String& data)
+{
+    static String addr = Config::value<String>("multicast-address");
+    static uint16_t port = Config::value<int>("multicast-port");
+    mMulticast.writeTo(addr, port, data);
+}
+
+void Daemon::announceJobs()
+{
+    String data;
+    {
+#warning fix me as well
+        /*
+        const Map<Path, Compiler>::const_iterator it = mCompilers.find(job.compiler());
+        if (it == mCompilers.end())
+            return;
+        static const uint16_t port = Config::value<int>("daemon-port");
+        Serializer serializer(data);
+        serializer << it->second.sha256 << port;
+        */
+    }
+    writeMulticast(data);
+}
+
+void Daemon::startJob(Connection *conn, const JobMessage &job) // ### need to do load balancing, max jobs etc
 {
     warning() << "handleJob" << job.sourceFile();
     debug() << job.compiler() << job.arguments() << job.path();
-    if (mConnections.size() >= mMaxJobs) {
-        mPendingJobs.append(std::make_pair(conn, job));
-        return;
-    }
-    ConnectionData &data = mConnections[conn];
-    data.job = job;
-    data.process.setData(ConnectionPointer, conn);
-    data.process.setCwd(job.cwd());
-    data.process.finished().connect(this, &Daemon::onProcessFinished);
-    data.process.readyReadStdOut().connect(this, &Daemon::onProcessReadyReadStdOut);
-    data.process.readyReadStdErr().connect(this, &Daemon::onProcessReadyReadStdErr);
-
     const Path compiler = job.compiler();
     List<String> environ = mEnviron;
     environ += ("PATH=" + job.path());
-    
+
     if (!mCompilers.contains(compiler)) {
         Compiler &c = mCompilers[compiler];
         Process process;
@@ -251,12 +319,28 @@ void Daemon::startJob(Connection *conn, const Job &job) // ### need to do load b
             }
             c.sha256 = sha.hash(SHA256::Hex);
             fclose(f);
+
+            mShaToCompiler[c.sha256] = compiler;
         }
 
         warning() << "Created package" << compiler << c.files << c.sha256;
         // CompilerMessage msg(compiler, c.files, c.sha256);
         // createCompiler(&msg);
     }
+
+    if (mConnections.size() >= mMaxJobs) {
+#warning and fix me here too
+        //mPendingJobs.append(std::make_pair(conn, job));
+        mAnnounceTimer.start(shared_from_this(), 500, SingleShot, Announce);
+        return;
+    }
+    ConnectionData &data = mConnections[conn];
+    data.job = job;
+    data.process.setData(ConnectionPointer, conn);
+    data.process.setCwd(job.cwd());
+    data.process.finished().connect(this, &Daemon::onProcessFinished);
+    data.process.readyReadStdOut().connect(this, &Daemon::onProcessReadyReadStdOut);
+    data.process.readyReadStdErr().connect(this, &Daemon::onProcessReadyReadStdErr);
 
     if (!data.process.start(job.compiler(), job.arguments(), environ)) {
         const Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
@@ -328,6 +412,9 @@ bool Daemon::createCompiler(CompilerMessage *message)
     return true;
 }
 
-void Daemon::timerEvent(TimerEvent *)
+void Daemon::timerEvent(TimerEvent *e)
 {
+    if (e->userData() == Announce) {
+        announceJobs();
+    }
 }
