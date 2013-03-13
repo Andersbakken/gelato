@@ -5,7 +5,9 @@
 #include <rct/SocketServer.h>
 #include <rct/Connection.h>
 #include <rct/Process.h>
+#include <rct/LinkedList.h>
 #include "JobMessage.h"
+#include "Job.h"
 
 class CompilerMessage;
 class Daemon : public EventReceiver
@@ -32,10 +34,11 @@ private:
     void onMulticastData(SocketClient *, String host, uint16_t port, String data);
     void onTcpClientConnected();
     void onTcpConnectionDisconnected(Connection *connection);
+    void onJobFinished(Job* job);
 
     void announceJobs();
     void requestCompiler(Connection*, const String& sha256);
-    void requestJob(Connection*, const String& sha256);
+    void requestJobs(Connection*, const String& sha256, int count);
     Connection* connection(const String& host, uint16_t port);
 
     void writeMulticast(const String& data);
@@ -54,7 +57,17 @@ private:
         Connection* conn;
         JobMessage job;
     };
-    Map<String, List<PendingJob> > mPendingJobs;
+
+    struct JobInfo
+    {
+        typedef LinkedList<std::pair<Job, LinkedList<JobInfo>::iterator> > JobList;
+
+        Job::Type type;
+        JobList::iterator entry;
+    };
+
+    JobInfo::JobList mPendingJobs, mLocalJobs, mRemoteJobs;
+    Map<String, LinkedList<JobInfo> > mShaToJob;
 
     struct Compiler {
         String sha256;

@@ -4,9 +4,11 @@
 #include <rct/Process.h>
 #include <rct/Connection.h>
 
-Job::Job(const JobMessage& message, Connection* source)
-    : mMsg(message), mSource(source), mType(Pending), mReturnCode(-1), mFinished(false)
+Job::Job(const JobMessage& message, const String& sha256, Connection* source)
+    : mMsg(message), mSha256(sha256), mSource(source), mType(Pending), mReturnCode(-1), mFinished(false)
 {
+    static unsigned int currentId = 0;
+    mId = ++currentId;
     source->connected().connect(this, &Job::sourceDisconnected);
 }
 

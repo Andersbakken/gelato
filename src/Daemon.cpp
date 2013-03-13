@@ -48,22 +48,28 @@ void Daemon::onMulticastData(SocketClient *, String host, uint16_t port, String 
 {
     error() << "got multicast data" << host << port << data;
     Deserializer deserializer(data.data(), data.size());
-    String sha256;
     uint16_t tcpPort;
-    deserializer >> sha256 >> tcpPort;
-    error() << "got sha" << sha256 << tcpPort;
+    deserializer >> tcpPort;
+    while (!deserializer.atEnd()) {
+        String sha256;
+        int count;
+        deserializer >> sha256 >> count;
+        error() << "got sha" << sha256 << "with count" << count << "for port" << tcpPort;
 
-    // check if I have the compiler
-    const Map<String, Path>::const_iterator compiler = mShaToCompiler.find(sha256);
-    if (compiler == mShaToCompiler.end()) { // no, request it
-        Connection* conn = connection(host, tcpPort);
-        if (conn)
-            requestCompiler(conn, sha256);
-    } else if (mConnections.size() < mMaxJobs) {
-        // yes, check if I have room to run a job
-        Connection* conn = connection(host, tcpPort);
-        if (conn)
-            requestJob(conn, sha256);
+        // check if I have the compiler
+        const Map<String, Path>::const_iterator compiler = mShaToCompiler.find(sha256);
+        if (compiler == mShaToCompiler.end()) { // no, request it
+            Connection* conn = connection(host, tcpPort);
+            if (conn)
+                requestCompiler(conn, sha256);
+        } else if (mLocalJobs.size() < mMaxJobs) {
+            // I have room for more jobs
+            const int numJobs = std::max(count, mMaxJobs - mLocalJobs.size());
+#warning reserve placeholder jobs in mLocalJobs
+            Connection* conn = connection(host, tcpPort);
+            if (conn)
+                requestJobs(conn, sha256, numJobs);
+        }
     }
 }
 
@@ -85,9 +91,11 @@ Connection* Daemon::connection(const String& host, uint16_t port)
     return 0;
 }
 
-void Daemon::requestJob(Connection* conn, const String& sha256)
+void Daemon::requestJobs(Connection* conn, const String& sha256, int count)
 {
-    GelatoMessage msg(GelatoMessage::JobRequest, sha256);
+    // ### should probably use a more efficient message here
+    const String data = sha256 + ":" + String::number(count);
+    GelatoMessage msg(GelatoMessage::JobRequest, data);
     conn->send(&msg);
 }
 
@@ -228,11 +236,15 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
     }
 
     conn->deleteLater();
-    if (!mPendingJobs.isEmpty() && mConnections.size() < mMaxJobs) {
-#warning fixme
-        //        List<std::pair<Connection*, JobMessage> >::iterator it = mPendingJobs.begin();
-        //startJob((*it).first, (*it).second);
-        //mPendingJobs.erase(it);
+    if (!mPendingJobs.isEmpty() && mLocalJobs.size() < mMaxJobs) {
+        JobInfo::JobList::iterator jobentry = mPendingJobs.begin();
+        Job& job = jobentry->first;
+        LinkedList<JobInfo>::iterator& info = jobentry->second;
+        assert(info->type == Job::Pending);
+        job.startLocal();
+        info->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, info));
+        info->type = Job::Local;
+        mPendingJobs.erase(jobentry);
     }
 }
 
@@ -275,30 +287,56 @@ void Daemon::writeMulticast(const String& data)
 
 void Daemon::announceJobs()
 {
+    enum { DatagramSize = 1400 };
+
     String data;
     {
-#warning fix me as well
-        /*
-        const Map<Path, Compiler>::const_iterator it = mCompilers.find(job.compiler());
-        if (it == mCompilers.end())
-            return;
+        int currentPosition = 0, previousPosition = 0;
         static const uint16_t port = Config::value<int>("daemon-port");
+
         Serializer serializer(data);
-        serializer << it->second.sha256 << port;
-        */
+        serializer << port;
+
+        Map<String, LinkedList<JobInfo> >::const_iterator it = mShaToJob.begin();
+        const Map<String, LinkedList<JobInfo> >::const_iterator end = mShaToJob.end();
+        while (it != end) {
+            serializer << it->first << it->second.size();
+            ++it;
+
+            if (data.size() - currentPosition >= DatagramSize) {
+                // flush
+                assert(data.size() - previousPosition < DatagramSize);
+                assert(previousPosition > 0);
+                writeMulticast(data.left(previousPosition));
+                data = data.mid(previousPosition);
+                currentPosition = 0;
+            }
+            previousPosition = currentPosition;
+            currentPosition = data.size();
+            assert(currentPosition > previousPosition);
+            assert(data.size() - currentPosition < DatagramSize);
+        }
     }
-    writeMulticast(data);
+    if (!data.isEmpty()) {
+        writeMulticast(data);
+    }
 }
 
-void Daemon::startJob(Connection *conn, const JobMessage &job) // ### need to do load balancing, max jobs etc
+void Daemon::onJobFinished(Job* job)
 {
-    warning() << "handleJob" << job.sourceFile();
-    debug() << job.compiler() << job.arguments() << job.path();
-    const Path compiler = job.compiler();
-    List<String> environ = mEnviron;
-    environ += ("PATH=" + job.path());
+}
 
-    if (!mCompilers.contains(compiler)) {
+void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### need to do load balancing, max jobs etc
+{
+    warning() << "handleJob" << jobMessage.sourceFile();
+    debug() << jobMessage.compiler() << jobMessage.arguments() << jobMessage.path();
+    const Path compiler = jobMessage.compiler();
+    List<String> environ = mEnviron;
+    environ += ("PATH=" + jobMessage.path());
+
+    String sha256;
+    const Map<Path, Compiler>::const_iterator compilerEntry = mCompilers.find(compiler);
+    if (compilerEntry == mCompilers.end()) {
         Compiler &c = mCompilers[compiler];
         Process process;
         process.exec(compiler, List<String>() << "-v" << "-E" << "-", environ);
@@ -324,7 +362,7 @@ void Daemon::startJob(Connection *conn, const JobMessage &job) // ### need to do
             while ((r = fread(buf, sizeof(char), sizeof(buf), f)) > 0) {
                 sha.update(buf, r);
             }
-            c.sha256 = sha.hash(SHA256::Hex);
+            sha256 = c.sha256 = sha.hash(SHA256::Hex);
             fclose(f);
 
             mShaToCompiler[c.sha256] = compiler;
@@ -333,29 +371,27 @@ void Daemon::startJob(Connection *conn, const JobMessage &job) // ### need to do
         warning() << "Created package" << compiler << c.files << c.sha256;
         // CompilerMessage msg(compiler, c.files, c.sha256);
         // createCompiler(&msg);
+    } else {
+        sha256 = compilerEntry->second.sha256;
     }
 
-    if (mConnections.size() >= mMaxJobs) {
-#warning and fix me here too
-        //mPendingJobs.append(std::make_pair(conn, job));
+    Job job(jobMessage, sha256, conn);
+    job.jobFinished().connect(this, &Daemon::onJobFinished);
+
+    LinkedList<JobInfo>& infos = mShaToJob[sha256];
+    if (mLocalJobs.size() >= mMaxJobs) {
+        JobInfo info = { Job::Pending };
+        LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
+        infoEntry->entry = mPendingJobs.insert(mPendingJobs.end(), std::make_pair(job, infoEntry));
         mAnnounceTimer.start(shared_from_this(), 500, SingleShot, Announce);
         return;
     }
-    ConnectionData &data = mConnections[conn];
-    data.job = job;
-    data.process.setData(ConnectionPointer, conn);
-    data.process.setCwd(job.cwd());
-    data.process.finished().connect(this, &Daemon::onProcessFinished);
-    data.process.readyReadStdOut().connect(this, &Daemon::onProcessReadyReadStdOut);
-    data.process.readyReadStdErr().connect(this, &Daemon::onProcessReadyReadStdErr);
 
-    if (!data.process.start(job.compiler(), job.arguments(), environ)) {
-        const Result response(Result::CompilerMissing, "Couldn't find compiler: " + data.job.compiler());
-        conn->send(&response);
-        conn->finish();
-    } else {
-        error() << "Compiling" << job.sourceFile();
-    }
+    // Local job
+    JobInfo info = { Job::Local };
+    LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
+    infoEntry->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, infoEntry));
+    infoEntry->entry->first.startLocal();
 }
 
 void Daemon::onProcessFinished(Process *process)
