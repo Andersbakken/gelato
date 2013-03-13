@@ -47,7 +47,7 @@ void Job::kill()
         break;
     case Remote: {
         GelatoMessage msg(GelatoMessage::Kill);
-        mData.conn->send(&msg);
+        mData.destination->send(&msg);
         // do NOT delete the connection here
         break; }
     }
