@@ -28,7 +28,7 @@ public:
         Other
     };
 
-    bool canPreprocess() const { return mSourceFiles.size() == 1; }
+    bool canPreprocess() const;
     bool isPreprocessed() const { return !mPreprocessed.isEmpty(); }
     String preprocessed() const { return mPreprocessed; }
     void setPreprocessed(const String& pre) { mPreprocessed = pre; }

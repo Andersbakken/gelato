@@ -15,6 +15,24 @@ void JobMessage::clear()
     mTimeout = -1;
 }
 
+static const char* guessType(const String& filename)
+{
+    Path p(filename);
+    const char* ext = p.extension();
+    if (!ext)
+        return 0;
+    const int extlen = strlen(ext);
+    if (!extlen)
+        return 0;
+    if (!strncasecmp(ext, "cpp", extlen)
+        || !strncasecmp(ext, "cc", extlen)
+        || !strncasecmp(ext, "cxx", extlen))
+        return "c++";
+    if (!strncasecmp(ext, "c", extlen))
+        return "c";
+    return 0;
+}
+
 bool JobMessage::parse(int argc, char **argv)
 {
     // mArgs = String("-DGELATO_DEBUG -DOS_Darwin -g -I/Users/abakken/dev/gelato/src/rct/src -I/Users/abakken/dev/gelato/src/rct/include -I/Users/abakken/dev/gelato/src    -o CMakeFiles/stracciatella.dir/Stracciatella.cpp.o -c /Users/abakken/dev/gelato/src/Stracciatella.cpp").split(' ');
@@ -129,14 +147,28 @@ bool JobMessage::parse(int argc, char **argv)
     return true;
 }
 
+bool JobMessage::canPreprocess() const
+{
+    return (mSourceFiles.size() == 1 && guessType(mArgs[mSourceFiles.front()]));
+}
+
 List<String> JobMessage::arguments() const
 {
     if (!isPreprocessed())
         return mArgs;
 
     assert(mSourceFiles.size() == 1);
+
     List<String> ret = mArgs;
-    ret[mSourceFiles.front()] = "-";
+
+    const int source = mSourceFiles.front();
+    const char* type = guessType(ret[source]);
+    if (type) {
+        ret.prepend(type);
+        ret.prepend("-x");
+    }
+
+    ret[source] = "-";
     return ret;
 }
 
