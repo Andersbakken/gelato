@@ -129,6 +129,17 @@ bool JobMessage::parse(int argc, char **argv)
     return true;
 }
 
+List<String> JobMessage::arguments() const
+{
+    if (!isPreprocessed())
+        return mArgs;
+
+    assert(mSourceFiles.size() == 1);
+    List<String> ret = mArgs;
+    ret[mSourceFiles.front()] = "-";
+    return ret;
+}
+
 List<String> JobMessage::preprocessArguments() const
 {
     if (mType == Preprocess)

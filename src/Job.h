@@ -10,7 +10,7 @@ class Process;
 class Job : public EventReceiver
 {
 public:
-    enum Type { Pending, Local, Remote };
+    enum Type { Pending, Preprocessed, Local, Remote };
 
     Job(const JobMessage& message, const String& sha256, Connection* source);
     ~Job();
@@ -20,19 +20,23 @@ public:
 
     void startLocal();
     void startRemote(Connection* destination);
+    bool startPreprocess();
 
     Type type() const { return mType; }
 
     void kill();
-    void setPending();
+    bool isPreprocessed() const;
 
     bool isFinished() const { return mFinished; }
 
     signalslot::Signal1<Job*>& jobFinished() { return mJobFinished; }
+    signalslot::Signal1<Job*>& preprocessed() { return mPreprocessed; }
 
 private:
     void sourceDisconnected(Connection*);
     void onProcessFinished(Process *process);
+
+    void deleteProcess();
 
 private:
     JobMessage mMsg;
@@ -46,8 +50,9 @@ private:
 
     String mStdOut, mStdErr;
     int mReturnCode;
-    bool mFinished;
+    bool mFinished, mPreprocessing;
     signalslot::Signal1<Job*> mJobFinished;
+    signalslot::Signal1<Job*> mPreprocessed;
 
     unsigned int mId;
 };

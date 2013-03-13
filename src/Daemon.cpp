@@ -25,6 +25,7 @@ static void sigIntHandler(int)
 }
 
 Daemon::Daemon()
+    : mPreprocessing(0)
 {
     assert(!sInstance);
     sInstance = 0;
@@ -147,6 +148,7 @@ void Daemon::onLocalClientConnected()
 bool Daemon::init()
 {
     mMaxJobs = Config::value<int>("jobs");
+    mMaxPreprocess = Config::value<int>("preprocess");
     error() << "Running with" << mMaxJobs << "jobs";
     mEnviron = Process::environment();
     for (int i = 0; i < mEnviron.size(); ++i) {
@@ -297,10 +299,10 @@ void Daemon::announceJobs()
         Serializer serializer(data);
         serializer << port;
 
-        Map<String, LinkedList<JobInfo> >::const_iterator it = mShaToJob.begin();
-        const Map<String, LinkedList<JobInfo> >::const_iterator end = mShaToJob.end();
+        Map<String, int>::const_iterator it = mPreprocessedCount.begin();
+        const Map<String, int>::const_iterator end = mPreprocessedCount.end();
         while (it != end) {
-            serializer << it->first << it->second.size();
+            serializer << it->first << it->second;
             ++it;
 
             if (data.size() - currentPosition >= DatagramSize) {
@@ -324,6 +326,39 @@ void Daemon::announceJobs()
 
 void Daemon::onJobFinished(Job* job)
 {
+}
+
+void Daemon::onJobPreprocessed(Job* job)
+{
+    Map<int, LinkedList<JobInfo>::iterator>::iterator jobInfo = mIdToJob.find(job->id());
+    if (jobInfo == mIdToJob.end()) {
+        // already done? throw it away
+        job->deleteLater();
+        return;
+    }
+    LinkedList<JobInfo>::iterator& info = jobInfo->second;
+    assert(info->type == Job::Pending);
+    if (info->type == Job::Pending) {
+        ++mPreprocessedCount[job->sha256()];
+
+        Job& job = info->entry->first;
+        JobInfo::JobList::iterator newit = mPreprocessed.insert(mPreprocessed.end(), std::make_pair(job, info));
+        mPendingJobs.erase(info->entry);
+        info->entry = newit;
+        info->type = Job::Preprocessed;
+
+        mAnnounceTimer.start(shared_from_this(), 500, SingleShot, Announce);
+    }
+    if (!mPendingJobs.isEmpty()) {
+        // start a new one
+        JobInfo::JobList::iterator job = mPendingJobs.begin();
+        if (job->first.startPreprocess()) {
+            job->first.preprocessed().connect(this, &Daemon::onJobPreprocessed);
+        }
+    } else {
+        --mPreprocessing;
+    }
+
 }
 
 void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### need to do load balancing, max jobs etc
@@ -383,6 +418,15 @@ void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### nee
         JobInfo info = { Job::Pending };
         LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
         infoEntry->entry = mPendingJobs.insert(mPendingJobs.end(), std::make_pair(job, infoEntry));
+        mIdToJob[job.id()] = infoEntry;
+
+        if (mPreprocessing < mMaxPreprocess) {
+            if (infoEntry->entry->first.startPreprocess()) {
+                infoEntry->entry->first.preprocessed().connect(this, &Daemon::onJobPreprocessed);
+                ++mPreprocessing;
+            }
+        }
+
         mAnnounceTimer.start(shared_from_this(), 500, SingleShot, Announce);
         return;
     }

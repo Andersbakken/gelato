@@ -35,6 +35,7 @@ private:
     void onTcpClientConnected();
     void onTcpConnectionDisconnected(Connection *connection);
     void onJobFinished(Job* job);
+    void onJobPreprocessed(Job* job);
 
     void announceJobs();
     void requestCompiler(Connection*, const String& sha256);
@@ -66,8 +67,11 @@ private:
         JobList::iterator entry;
     };
 
-    JobInfo::JobList mPendingJobs, mLocalJobs, mRemoteJobs;
+    JobInfo::JobList mPendingJobs, mPreprocessed, mLocalJobs, mRemoteJobs;
     Map<String, LinkedList<JobInfo> > mShaToJob;
+    Map<String, int> mPreprocessedCount;
+    Map<int, LinkedList<JobInfo>::iterator> mIdToJob;
+    int mPreprocessing;
 
     struct Compiler {
         String sha256;
@@ -83,7 +87,7 @@ private:
     };
 
     Map<String, RemoteData> mDaemons;
-    int mMaxJobs;
+    int mMaxJobs, mMaxPreprocess;
 
     Timer mAnnounceTimer;
 

@@ -28,11 +28,13 @@ public:
         Other
     };
 
+    bool canPreprocess() const { return mSourceFiles.size() == 1; }
     bool isPreprocessed() const { return !mPreprocessed.isEmpty(); }
     String preprocessed() const { return mPreprocessed; }
+    void setPreprocessed(const String& pre) { mPreprocessed = pre; }
 
     Type type() const { return mType; }
-    List<String> arguments() const { return mArgs; }
+    List<String> arguments() const;
     List<String> preprocessArguments() const;
 
     List<Path> sourceFiles() const;
