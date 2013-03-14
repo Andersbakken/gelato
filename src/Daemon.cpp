@@ -94,9 +94,9 @@ Connection* Daemon::connection(const String& host, uint16_t port)
 
 void Daemon::requestJobs(Connection* conn, const String& sha256, int count)
 {
-    // ### should probably use a more efficient message here
-    const String data = sha256 + ":" + String::number(count);
-    GelatoMessage msg(GelatoMessage::JobRequest, data);
+    List<Value> values;
+    values << sha256 << count;
+    GelatoMessage msg(GelatoMessage::JobRequest, values);
     conn->send(&msg);
 }
 
@@ -206,8 +206,9 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     case CompilerMessage::MessageId:
         createCompiler(static_cast<CompilerMessage*>(message));
         break;
-    case GelatoMessage::MessageId:
-        switch (static_cast<GelatoMessage*>(message)->type()) {
+    case GelatoMessage::MessageId: {
+        const GelatoMessage *gelatoMessage = static_cast<GelatoMessage*>(message);
+        switch (gelatoMessage->type()) {
         case GelatoMessage::Quit:
             EventLoop::instance()->exit();
             break;
@@ -218,7 +219,12 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
             break;
         case GelatoMessage::CompilerRequest:
             break;
-        case GelatoMessage::JobRequest:
+        case GelatoMessage::JobRequest: {
+            const List<Value> values = gelatoMessage->value().toList();
+            assert(values.size() == 2);
+            const String sha256 = values.at(0).toString();
+            const int count = values.at(1).toInteger();
+            handleJobRequest(sha256, count);
             break;
         case GelatoMessage::Kill:
             break;
@@ -506,4 +512,9 @@ void Daemon::timerEvent(TimerEvent *e)
     if (e->userData() == Announce) {
         announceJobs();
     }
+}
+
+void Daemon::handleJobRequest(const String &sha, int count)
+{
+    
 }

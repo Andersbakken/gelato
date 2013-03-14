@@ -27,6 +27,7 @@ private:
     void onLocalConnectionDisconnected(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
     void startJob(Connection *conn, const JobMessage &job);
+    void handleJobRequest(const String &sha, int count);
     bool createCompiler(CompilerMessage *message);
     void onProcessFinished(Process *process);
     void onProcessReadyReadStdOut(Process *process);
