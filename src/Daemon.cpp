@@ -246,10 +246,10 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
     conn->deleteLater();
     if (!mPendingJobs.isEmpty() && mLocalJobs.size() < mMaxJobs) {
         JobInfo::JobList::iterator jobentry = mPendingJobs.begin();
-        Job& job = jobentry->first;
+        shared_ptr<Job> job = jobentry->first;
         LinkedList<JobInfo>::iterator& info = jobentry->second;
         assert(info->type == Job::Pending);
-        job.startLocal();
+        job->startLocal();
         info->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, info));
         info->type = Job::Local;
         mPendingJobs.erase(jobentry);
@@ -347,7 +347,7 @@ void Daemon::onJobPreprocessed(Job* job)
     if (info->type == Job::Pending) {
         ++mPreprocessedCount[job->sha256()];
 
-        Job& job = info->entry->first;
+        shared_ptr<Job> job = info->entry->first;
         JobInfo::JobList::iterator newit = mPreprocessed.insert(mPreprocessed.end(), std::make_pair(job, info));
         mPendingJobs.erase(info->entry);
         info->entry = newit;
@@ -358,8 +358,8 @@ void Daemon::onJobPreprocessed(Job* job)
     if (!mPendingJobs.isEmpty()) {
         // start a new one
         JobInfo::JobList::iterator job = mPendingJobs.begin();
-        if (job->first.startPreprocess()) {
-            job->first.preprocessed().connect(this, &Daemon::onJobPreprocessed);
+        if (job->first->startPreprocess()) {
+            job->first->preprocessed().connect(this, &Daemon::onJobPreprocessed);
         }
     } else {
         --mPreprocessing;
@@ -406,19 +406,19 @@ void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### nee
         sha256 = compilerEntry->second.sha256;
     }
 
-    Job job(jobMessage, sha256, conn);
-    job.jobFinished().connect(this, &Daemon::onJobFinished);
+    shared_ptr<Job> job(new Job(jobMessage, sha256, conn));
+    job->jobFinished().connect(this, &Daemon::onJobFinished);
 
     LinkedList<JobInfo>& infos = mShaToJob[sha256];
     if (mLocalJobs.size() >= mMaxJobs) {
         JobInfo info = { Job::Pending };
         LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
         infoEntry->entry = mPendingJobs.insert(mPendingJobs.end(), std::make_pair(job, infoEntry));
-        mIdToJob[job.id()] = infoEntry;
+        mIdToJob[job->id()] = infoEntry;
 
         if (mPreprocessing < mMaxPreprocess) {
-            if (infoEntry->entry->first.startPreprocess()) {
-                infoEntry->entry->first.preprocessed().connect(this, &Daemon::onJobPreprocessed);
+            if (infoEntry->entry->first->startPreprocess()) {
+                infoEntry->entry->first->preprocessed().connect(this, &Daemon::onJobPreprocessed);
                 ++mPreprocessing;
             }
         }
@@ -431,7 +431,7 @@ void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### nee
     JobInfo info = { Job::Local };
     LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
     infoEntry->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, infoEntry));
-    infoEntry->entry->first.startLocal();
+    infoEntry->entry->first->startLocal();
 }
 
 void Daemon::onProcessFinished(Process *process)

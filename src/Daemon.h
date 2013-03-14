@@ -62,7 +62,7 @@ private:
 
     struct JobInfo
     {
-        typedef LinkedList<std::pair<Job, LinkedList<JobInfo>::iterator> > JobList;
+        typedef LinkedList<std::pair<shared_ptr<Job>, LinkedList<JobInfo>::iterator> > JobList;
 
         Job::Type type;
         JobList::iterator entry;
