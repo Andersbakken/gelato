@@ -225,11 +225,11 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
             const String sha256 = values.at(0).toString();
             const int count = values.at(1).toInteger();
             handleJobRequest(sha256, count);
-            break;
+            break; }
         case GelatoMessage::Kill:
             break;
         }
-        break;
+        break; }
     }
 }
 
@@ -382,9 +382,12 @@ void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### nee
         Process process;
         process.exec(compiler, List<String>() << "-v" << "-E" << "-", environ);
 
+        SHA256 sha;
         const List<String> lines = process.readAllStdErr().split('\n');
         for (int i=0; i<lines.size(); ++i) {
             const String &line = lines.at(i);
+            sha.update(line);
+
             if (line.startsWith("COMPILER_PATH=")) {
                 const Set<String> paths = line.mid(14).split(':').toSet();
                 for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
@@ -395,20 +398,7 @@ void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### nee
                 }
             }
         }
-        FILE *f = fopen(compiler.constData(), "r");
-        if (f) {
-            char buf[1024];
-            int r;
-            SHA256 sha;
-            while ((r = fread(buf, sizeof(char), sizeof(buf), f)) > 0) {
-                sha.update(buf, r);
-            }
-            sha256 = c.sha256 = sha.hash(SHA256::Hex);
-            fclose(f);
-
-            mShaToCompiler[c.sha256] = compiler;
-        }
-
+        sha256 = c.sha256 = sha.hash(SHA256::Hex);
         warning() << "Created package" << compiler << c.files << c.sha256;
         // CompilerMessage msg(compiler, c.files, c.sha256);
         // createCompiler(&msg);
@@ -516,5 +506,5 @@ void Daemon::timerEvent(TimerEvent *e)
 
 void Daemon::handleJobRequest(const String &sha, int count)
 {
-    
+
 }
