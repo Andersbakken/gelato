@@ -218,8 +218,20 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
             break;
         case GelatoMessage::Invalid:
             break;
-        case GelatoMessage::CompilerRequest:
-            break;
+        case GelatoMessage::CompilerRequest: {
+            const Map<String, Path>::const_iterator cpath = mShaToCompiler.find(gelatoMessage->value().toString());
+            if (cpath == mShaToCompiler.end()) {
+                // send an empty compiler message
+                CompilerMessage msg(gelatoMessage->value().toString());
+                conn->send(&msg);
+            } else {
+                // load up and send the compiler
+                assert(mCompilers.contains(cpath->second));
+                const Compiler& compiler = mCompilers[cpath->second];
+                CompilerMessage msg(cpath->second, compiler.files, compiler.sha256);
+                conn->send(&msg);
+            }
+            break; }
         case GelatoMessage::JobRequest: {
             const List<Value> values = gelatoMessage->value().toList();
             assert(values.size() == 2);
@@ -480,26 +492,16 @@ void Daemon::onProcessReadyReadStdErr(Process *process)
 // ### maybe cache this for a little while
 bool Daemon::createCompiler(CompilerMessage *message)
 {
-    Path path = String::format<256>("%s/compiler_%s", Rct::executablePath().parentDir().constData(), message->sha256().constData());
-    Path::mkdir(path, Path::Recursive);
-    const Map<Path, String> &paths = message->paths();
-
-    for (Map<Path, String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
-        Path abs = path + it->first;
-        if (!Path::mkdir(abs.parentDir(), Path::Recursive)) {
-            error("Couldn't create directory %s", abs.parentDir().constData());
-        }
-        FILE *f = fopen(abs.constData(), "w");
-        if (!f) {
-            error("Couldn't create file %s", abs.constData());
-            return false;
-        }
-        if (!fwrite(it->second.constData(), it->second.size(), 1, f)) {
-            error() << "Write error" << abs;
-        }
-        fclose(f);
+    if (!message->isValid()) {
+        error() << "No compiler for" << message->sha256();
+        return false;
     }
-    return true;
+    Path path = String::format<256>("%s/compiler_%s", Rct::executablePath().parentDir().constData(), message->sha256().constData());
+    if (path.isDir() || Path::mkdir(path, Path::Recursive)) {
+        message->writeFiles(path);
+        return true;
+    }
+    return false;
 }
 
 void Daemon::timerEvent(TimerEvent *e)
