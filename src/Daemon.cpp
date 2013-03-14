@@ -49,12 +49,11 @@ void Daemon::onMulticastData(SocketClient *, String host, uint16_t port, String 
 {
     error() << "got multicast data" << host << port << data;
     Deserializer deserializer(data.data(), data.size());
-    uint16_t tcpPort;
-    deserializer >> tcpPort;
     while (!deserializer.atEnd()) {
         String sha256;
         int count;
-        deserializer >> sha256 >> count;
+        uint16_t tcpPort;
+        deserializer >> sha256 >> count >> tcpPort;
         error() << "got sha" << sha256 << "with count" << count << "for port" << tcpPort;
 
         // check if I have the compiler
@@ -321,12 +320,10 @@ void Daemon::announceJobs()
         static const uint16_t port = Config::value<int>("daemon-port");
 
         Serializer serializer(data);
-        serializer << port;
-
         Map<String, int>::const_iterator it = mPreprocessedCount.begin();
         const Map<String, int>::const_iterator end = mPreprocessedCount.end();
         while (it != end) {
-            serializer << it->first << it->second;
+            serializer << it->first << it->second << port;
             ++it;
 
             if (data.size() - currentPosition >= DatagramSize) {
