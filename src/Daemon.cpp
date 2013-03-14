@@ -14,7 +14,7 @@
 
 #define DEBUGMULTICAST
 
-static void* Announce = &Announce;
+static void *Announce = &Announce;
 Daemon *Daemon::sInstance = 0;
 
 Path socketFile;
@@ -60,28 +60,27 @@ void Daemon::onMulticastData(SocketClient *, String host, uint16_t port, String 
         // check if I have the compiler
         const Map<String, Path>::const_iterator compiler = mShaToCompiler.find(sha256);
         if (compiler == mShaToCompiler.end()) { // no, request it
-            Connection* conn = connection(host, tcpPort);
+            Connection *conn = connection(host, tcpPort);
             if (conn)
                 requestCompiler(conn, sha256);
         } else if (mLocalJobs.size() < mMaxJobs) {
             // I have room for more jobs
             const int numJobs = std::max(count, mMaxJobs - mLocalJobs.size());
-#warning reserve placeholder jobs in mLocalJobs
-            Connection* conn = connection(host, tcpPort);
+            Connection *conn = connection(host, tcpPort);
             if (conn)
                 requestJobs(conn, sha256, numJobs);
         }
     }
 }
 
-Connection* Daemon::connection(const String& host, uint16_t port)
+Connection *Daemon::connection(const String &host, uint16_t port)
 {
     const Map<String, RemoteData>::const_iterator it = mDaemons.find(host);
     if (it != mDaemons.end())
         return it->second.conn;
-    SocketClient* client = new SocketClient;
+    SocketClient *client = new SocketClient;
     if (client->connectTcp(host, port)) {
-        Connection* conn = new Connection(client);
+        Connection *conn = new Connection(client);
         conn->disconnected().connect(this, &Daemon::onTcpConnectionDisconnected);
         conn->newMessage().connect(this, &Daemon::onNewMessage);
         RemoteData remote = { conn };
@@ -92,21 +91,23 @@ Connection* Daemon::connection(const String& host, uint16_t port)
     return 0;
 }
 
-void Daemon::requestJobs(Connection* conn, const String& sha256, int count)
+void Daemon::requestJobs(Connection *conn, const String &sha256, int count)
 {
     List<Value> values;
     values << sha256 << count;
     GelatoMessage msg(GelatoMessage::JobRequest, values);
-    conn->send(&msg);
+    if (conn->send(&msg)) {
+#warning add placeholder to localjobs
+    }
 }
 
-void Daemon::requestCompiler(Connection* conn, const String& sha256)
+void Daemon::requestCompiler(Connection *conn, const String &sha256)
 {
     GelatoMessage msg(GelatoMessage::CompilerRequest, sha256);
     conn->send(&msg);
 }
 
-void Daemon::onTcpConnectionDisconnected(Connection* connection)
+void Daemon::onTcpConnectionDisconnected(Connection *connection)
 {
     const String remote = connection->client()->remoteAddress();
     mDaemons.remove(remote);
@@ -116,7 +117,7 @@ void Daemon::onTcpConnectionDisconnected(Connection* connection)
 void Daemon::onTcpClientConnected()
 {
     error() << "got tcp client";
-    SocketClient* client;
+    SocketClient *client;
     while ((client = mTcpServer.nextClient())) {
         const String remote = client->remoteAddress();
         if (mDaemons.contains(remote)) {
@@ -126,7 +127,7 @@ void Daemon::onTcpClientConnected()
             return;
         }
 
-        Connection* conn = new Connection(client);
+        Connection *conn = new Connection(client);
         conn->disconnected().connect(this, &Daemon::onTcpConnectionDisconnected);
         conn->newMessage().connect(this, &Daemon::onNewMessage);
         RemoteData remoteData = { conn };
@@ -201,7 +202,7 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
     warning() << "onNewMessage" << message->messageId();
     switch (message->messageId()) {
     case JobMessage::MessageId:
-        startJob(conn, *static_cast<JobMessage*>(message));
+        handleJobMessage(conn, *static_cast<JobMessage*>(message));
         break;
     case CompilerMessage::MessageId:
         createCompiler(static_cast<CompilerMessage*>(message));
@@ -247,13 +248,18 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
     if (!mPendingJobs.isEmpty() && mLocalJobs.size() < mMaxJobs) {
         JobInfo::JobList::iterator jobentry = mPendingJobs.begin();
         shared_ptr<Job> job = jobentry->first;
-        LinkedList<JobInfo>::iterator& info = jobentry->second;
-        assert(info->type == Job::Pending);
-        job->startLocal();
-        info->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, info));
-        info->type = Job::Local;
+        LinkedList<JobInfo>::iterator &info = jobentry->second;
         mPendingJobs.erase(jobentry);
+        assert(info->type == Job::Pending);
+        startLocalJob(job, info);
     }
+}
+
+void Daemon::startLocalJob(const shared_ptr<Job> &job, LinkedList<JobInfo>::iterator info)
+{
+    job->startLocal();
+    info->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, info));
+    info->type = Job::Local;
 }
 
 static Path::VisitResult visitor(const Path &path, void *userData)
@@ -286,7 +292,7 @@ static Path::VisitResult visitor(const Path &path, void *userData)
     return Path::Continue;
 }
 
-void Daemon::writeMulticast(const String& data)
+void Daemon::writeMulticast(const String &data)
 {
     static String addr = Config::value<String>("multicast-address");
     static uint16_t port = Config::value<int>("multicast-port");
@@ -330,11 +336,11 @@ void Daemon::announceJobs()
     }
 }
 
-void Daemon::onJobFinished(Job* job)
+void Daemon::onJobFinished(Job *job)
 {
 }
 
-void Daemon::onJobPreprocessed(Job* job)
+void Daemon::onJobPreprocessed(Job *job)
 {
     Map<int, LinkedList<JobInfo>::iterator>::iterator jobInfo = mIdToJob.find(job->id());
     if (jobInfo == mIdToJob.end()) {
@@ -342,7 +348,7 @@ void Daemon::onJobPreprocessed(Job* job)
         job->deleteLater();
         return;
     }
-    LinkedList<JobInfo>::iterator& info = jobInfo->second;
+    LinkedList<JobInfo>::iterator &info = jobInfo->second;
     assert(info->type == Job::Pending);
     if (info->type == Job::Pending) {
         ++mPreprocessedCount[job->sha256()];
@@ -367,7 +373,7 @@ void Daemon::onJobPreprocessed(Job* job)
 
 }
 
-void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### need to do load balancing, max jobs etc
+void Daemon::handleJobMessage(Connection *conn, const JobMessage &jobMessage) // ### need to do load balancing, max jobs etc
 {
     warning() << "handleJob" << jobMessage.sourceFile();
     debug() << jobMessage.compiler() << jobMessage.arguments() << jobMessage.path();
@@ -409,7 +415,7 @@ void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### nee
     shared_ptr<Job> job(new Job(jobMessage, sha256, conn));
     job->jobFinished().connect(this, &Daemon::onJobFinished);
 
-    LinkedList<JobInfo>& infos = mShaToJob[sha256];
+    LinkedList<JobInfo>& infos = mShaToJobs[sha256];
     if (mLocalJobs.size() >= mMaxJobs) {
         JobInfo info = { Job::Pending };
         LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
@@ -430,8 +436,7 @@ void Daemon::startJob(Connection *conn, const JobMessage &jobMessage) // ### nee
     // Local job
     JobInfo info = { Job::Local };
     LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
-    infoEntry->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, infoEntry));
-    infoEntry->entry->first->startLocal();
+    startLocalJob(job, infoEntry);
 }
 
 void Daemon::onProcessFinished(Process *process)

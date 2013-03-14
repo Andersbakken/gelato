@@ -26,7 +26,9 @@ private:
     void onLocalClientConnected();
     void onLocalConnectionDisconnected(Connection *connection);
     void onNewMessage(Message *message, Connection *connection);
-    void startJob(Connection *conn, const JobMessage &job);
+    void handleJobMessage(Connection *conn, const JobMessage &job);
+    struct JobInfo;
+    void startLocalJob(const shared_ptr<Job> &job, LinkedList<JobInfo>::iterator it);
     void handleJobRequest(const String &sha, int count);
     bool createCompiler(CompilerMessage *message);
     void onProcessFinished(Process *process);
@@ -35,13 +37,13 @@ private:
     void onMulticastData(SocketClient *, String host, uint16_t port, String data);
     void onTcpClientConnected();
     void onTcpConnectionDisconnected(Connection *connection);
-    void onJobFinished(Job* job);
-    void onJobPreprocessed(Job* job);
+    void onJobFinished(Job *job);
+    void onJobPreprocessed(Job *job);
 
     void announceJobs();
     void requestCompiler(Connection*, const String& sha256);
     void requestJobs(Connection*, const String& sha256, int count);
-    Connection* connection(const String& host, uint16_t port);
+    Connection *connection(const String& host, uint16_t port);
 
     void writeMulticast(const String& data);
 
@@ -56,7 +58,7 @@ private:
     Map<Connection*, ConnectionData> mConnections;
 
     struct PendingJob {
-        Connection* conn;
+        Connection *conn;
         JobMessage job;
     };
 
@@ -69,7 +71,7 @@ private:
     };
 
     JobInfo::JobList mPendingJobs, mPreprocessed, mLocalJobs, mRemoteJobs;
-    Map<String, LinkedList<JobInfo> > mShaToJob;
+    Map<String, LinkedList<JobInfo> > mShaToJobs;
     Map<String, int> mPreprocessedCount;
     Map<int, LinkedList<JobInfo>::iterator> mIdToJob;
     int mPreprocessing;
@@ -84,7 +86,7 @@ private:
     List<String> mEnviron;
 
     struct RemoteData {
-        Connection* conn;
+        Connection *conn;
     };
 
     Map<String, RemoteData> mDaemons;
