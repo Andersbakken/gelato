@@ -73,15 +73,16 @@ private:
     };
 
     JobInfo::JobList mPendingJobs, mPreprocessed, mLocalJobs, mRemoteJobs;
-    Map<String, LinkedList<JobInfo> > mShaToJobs;
-    Map<String, int> mPreprocessedCount;
     Map<int, LinkedList<JobInfo>::iterator> mIdToJob;
     int mPreprocessing;
 
     struct Compiler {
+        Compiler() : preprocessedCount(0) {}
         String sha256;
         Path path;
         Set<Path> files;
+        LinkedList<JobInfo> jobs;
+        int preprocessedCount;
         // flags, 32-bit, arch
     };
     Map<Path, shared_ptr<Compiler> > mCompilerByPath;

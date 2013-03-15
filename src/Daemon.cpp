@@ -321,25 +321,25 @@ void Daemon::announceJobs()
         static const uint16_t port = Config::value<int>("daemon-port");
 
         Serializer serializer(data);
-        Map<String, int>::const_iterator it = mPreprocessedCount.begin();
-        const Map<String, int>::const_iterator end = mPreprocessedCount.end();
-        while (it != end) {
-            assert(mCompilerBySha.contains(it->first));
-            serializer << it->first << mCompilerBySha.value(it->first)->path << it->second << port;
-            ++it;
+        for (Map<String, shared_ptr<Compiler> >::const_iterator it = mCompilerBySha.begin();
+             it != mCompilerBySha.end(); ++it) {
+            const shared_ptr<Compiler> &compiler = it->second;
+            if (compiler->preprocessedCount) {
+                serializer << compiler->sha256 << compiler->path << compiler->preprocessedCount << port;
 
-            if (data.size() - currentPosition >= DatagramSize) {
-                // flush
-                assert(data.size() - previousPosition < DatagramSize);
-                assert(previousPosition > 0);
-                writeMulticast(data.left(previousPosition));
-                data = data.mid(previousPosition);
-                currentPosition = 0;
+                if (data.size() - currentPosition >= DatagramSize) {
+                    // flush
+                    assert(data.size() - previousPosition < DatagramSize);
+                    assert(previousPosition > 0);
+                    writeMulticast(data.left(previousPosition));
+                    data = data.mid(previousPosition);
+                    currentPosition = 0;
+                }
+                previousPosition = currentPosition;
+                currentPosition = data.size();
+                assert(currentPosition > previousPosition);
+                assert(data.size() - currentPosition < DatagramSize);
             }
-            previousPosition = currentPosition;
-            currentPosition = data.size();
-            assert(currentPosition > previousPosition);
-            assert(data.size() - currentPosition < DatagramSize);
         }
     }
     if (!data.isEmpty()) {
@@ -362,7 +362,8 @@ void Daemon::onJobPreprocessed(Job *job)
     LinkedList<JobInfo>::iterator &info = jobInfo->second;
     assert(info->type == Job::Pending);
     if (info->type == Job::Pending) {
-        ++mPreprocessedCount[job->sha256()];
+        assert(mCompilerBySha.contains(job->sha256()));
+        ++mCompilerBySha[job->sha256()]->preprocessedCount;
 
         shared_ptr<Job> job = info->entry->first;
         JobInfo::JobList::iterator newit = mPreprocessed.insert(mPreprocessed.end(), std::make_pair(job, info));
@@ -401,10 +402,9 @@ void Daemon::handleJobMessage(Connection *conn, const JobMessage &jobMessage) //
     shared_ptr<Job> job(new Job(jobMessage, c->sha256, conn));
     job->jobFinished().connect(this, &Daemon::onJobFinished);
 
-    LinkedList<JobInfo>& infos = mShaToJobs[c->sha256];
     if (mLocalJobs.size() >= mMaxJobs) {
         JobInfo info = { Job::Pending };
-        LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
+        LinkedList<JobInfo>::iterator infoEntry = c->jobs.insert(c->jobs.end(), info);
         infoEntry->entry = mPendingJobs.insert(mPendingJobs.end(), std::make_pair(job, infoEntry));
         mIdToJob[job->id()] = infoEntry;
 
@@ -421,7 +421,7 @@ void Daemon::handleJobMessage(Connection *conn, const JobMessage &jobMessage) //
 
     // Local job
     JobInfo info = { Job::Local };
-    LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
+    LinkedList<JobInfo>::iterator infoEntry = c->jobs.insert(c->jobs.end(), info);
     startLocalJob(job, infoEntry);
 }
 
