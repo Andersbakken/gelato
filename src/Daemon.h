@@ -39,6 +39,8 @@ private:
     void onTcpConnectionDisconnected(Connection *connection);
     void onJobFinished(Job *job);
     void onJobPreprocessed(Job *job);
+    struct Compiler;
+    shared_ptr<Compiler> compiler(const Path &compiler, const Path &pathEnv = Path());
 
     void announceJobs();
     void requestCompiler(Connection*, const String& sha256);
@@ -78,11 +80,12 @@ private:
 
     struct Compiler {
         String sha256;
+        Path path;
         Set<Path> files;
         // flags, 32-bit, arch
     };
-    Map<Path, Compiler> mCompilers;
-    Map<String, Path> mShaToCompiler;
+    Map<Path, shared_ptr<Compiler> > mCompilerByPath;
+    Map<String, shared_ptr<Compiler> > mCompilerBySha;
     List<String> mEnviron;
 
     struct RemoteData {

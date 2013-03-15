@@ -51,14 +51,17 @@ void Daemon::onMulticastData(SocketClient *, String host, uint16_t port, String 
     Deserializer deserializer(data.data(), data.size());
     while (!deserializer.atEnd()) {
         String sha256;
+        Path path;
         int count;
         uint16_t tcpPort;
-        deserializer >> sha256 >> count >> tcpPort;
+        deserializer >> sha256 >> path >> count >> tcpPort;
         error() << "got sha" << sha256 << "with count" << count << "for port" << tcpPort;
 
+        compiler(path); // no need to request the compiler if we have the exact
+                        // same one. Create our local one first
         // check if I have the compiler
-        const Map<String, Path>::const_iterator compiler = mShaToCompiler.find(sha256);
-        if (compiler == mShaToCompiler.end()) { // no, request it
+        shared_ptr<Compiler> compiler = mCompilerBySha.value(sha256);
+        if (!compiler) {
             Connection *conn = connection(host, tcpPort);
             if (conn)
                 requestCompiler(conn, sha256);
@@ -218,16 +221,14 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
         case GelatoMessage::Invalid:
             break;
         case GelatoMessage::CompilerRequest: {
-            const Map<String, Path>::const_iterator cpath = mShaToCompiler.find(gelatoMessage->value().toString());
-            if (cpath == mShaToCompiler.end()) {
+            shared_ptr<Compiler> compiler = mCompilerBySha.value(gelatoMessage->value().toString());
+            if (!compiler) {
                 // send an empty compiler message
                 CompilerMessage msg(gelatoMessage->value().toString());
                 conn->send(&msg);
             } else {
                 // load up and send the compiler
-                assert(mCompilers.contains(cpath->second));
-                const Compiler& compiler = mCompilers[cpath->second];
-                CompilerMessage msg(cpath->second, compiler.files, compiler.sha256);
+                CompilerMessage msg(compiler->path, compiler->files, compiler->sha256);
                 conn->send(&msg);
             }
             break; }
@@ -323,7 +324,8 @@ void Daemon::announceJobs()
         Map<String, int>::const_iterator it = mPreprocessedCount.begin();
         const Map<String, int>::const_iterator end = mPreprocessedCount.end();
         while (it != end) {
-            serializer << it->first << it->second << port;
+            assert(mCompilerBySha.contains(it->first));
+            serializer << it->first << mCompilerBySha.value(it->first)->path << it->second << port;
             ++it;
 
             if (data.size() - currentPosition >= DatagramSize) {
@@ -386,45 +388,20 @@ void Daemon::handleJobMessage(Connection *conn, const JobMessage &jobMessage) //
 {
     warning() << "handleJob" << jobMessage.sourceFile();
     debug() << jobMessage.compiler() << jobMessage.arguments() << jobMessage.path();
-    const Path compiler = jobMessage.compiler();
-    List<String> environ = mEnviron;
-    environ += ("PATH=" + jobMessage.path());
 
-    String sha256;
-    const Map<Path, Compiler>::const_iterator compilerEntry = mCompilers.find(compiler);
-    if (compilerEntry == mCompilers.end()) {
-        Compiler &c = mCompilers[compiler];
-        Process process;
-        process.exec(compiler, List<String>() << "-v" << "-E" << "-", environ);
-
-        SHA256 sha;
-        const List<String> lines = process.readAllStdErr().split('\n');
-        for (int i=0; i<lines.size(); ++i) {
-            const String &line = lines.at(i);
-            sha.update(line);
-
-            if (line.startsWith("COMPILER_PATH=")) {
-                const Set<String> paths = line.mid(14).split(':').toSet();
-                for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
-                    const Path p = Path::resolved(*it);
-                    if (p.isDir()) {
-                        p.visit(visitor, &c.files);
-                    }
-                }
-            }
-        }
-        sha256 = c.sha256 = sha.hash(SHA256::Hex);
-        warning() << "Created package" << compiler << c.files << c.sha256;
-        // CompilerMessage msg(compiler, c.files, c.sha256);
-        // createCompiler(&msg);
-    } else {
-        sha256 = compilerEntry->second.sha256;
+    shared_ptr<Compiler> c = compiler(jobMessage.compiler(), jobMessage.path());
+    if (!c) {
+        Result response(-1, String(), String::format<128>("Invalid compiler %s", jobMessage.compiler().constData()));
+        conn->send(&response);
+        conn->finish();
+        // ### what to do here?
+        return;
     }
-
-    shared_ptr<Job> job(new Job(jobMessage, sha256, conn));
+    assert(c);
+    shared_ptr<Job> job(new Job(jobMessage, c->sha256, conn));
     job->jobFinished().connect(this, &Daemon::onJobFinished);
 
-    LinkedList<JobInfo>& infos = mShaToJobs[sha256];
+    LinkedList<JobInfo>& infos = mShaToJobs[c->sha256];
     if (mLocalJobs.size() >= mMaxJobs) {
         JobInfo info = { Job::Pending };
         LinkedList<JobInfo>::iterator infoEntry = infos.insert(infos.end(), info);
@@ -511,4 +488,45 @@ void Daemon::timerEvent(TimerEvent *e)
 void Daemon::handleJobRequest(const String &sha, int count)
 {
 
+}
+
+shared_ptr<Daemon::Compiler> Daemon::compiler(const Path &compiler, const Path &path)
+{
+    const Map<Path, shared_ptr<Compiler> >::const_iterator compilerEntry = mCompilerByPath.find(compiler);
+    if (compilerEntry == mCompilerByPath.end()) {
+        shared_ptr<Compiler> &c = mCompilerByPath[compiler];
+        c.reset(new Compiler);
+        Process process;
+        List<String> environment;
+        if (!path.isEmpty()) {
+            environment = mEnviron;
+            environment += ("PATH=" + path);
+        }
+        process.exec(compiler, List<String>() << "-v" << "-E" << "-", environment);
+
+        SHA256 sha;
+        const List<String> lines = process.readAllStdErr().split('\n');
+        for (int i=0; i<lines.size(); ++i) {
+            const String &line = lines.at(i);
+            sha.update(line);
+
+            if (line.startsWith("COMPILER_PATH=")) {
+                const Set<String> paths = line.mid(14).split(':').toSet();
+                for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
+                    const Path p = Path::resolved(*it);
+                    if (p.isDir()) {
+                        p.visit(visitor, &c->files);
+                    }
+                }
+            }
+        }
+        c->sha256 = sha.hash(SHA256::Hex);
+        c->path = compiler;
+        mCompilerBySha[c->sha256] = c;
+        warning() << "Created package" << compiler << c->files << c->sha256;
+        // CompilerMessage msg(compiler, c.files, c.sha256);
+        // createCompiler(&msg);
+        return c;
+    }
+    return compilerEntry->second;
 }
