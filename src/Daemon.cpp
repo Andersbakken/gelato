@@ -7,7 +7,7 @@
 #include <rct/Rct.h>
 #include "JobMessage.h"
 #include "Common.h"
-#include "Result.h"
+#include "ResultMessage.h"
 #include "GelatoMessage.h"
 #include "CompilerMessage.h"
 #include <signal.h>
@@ -28,7 +28,7 @@ Daemon::Daemon()
     : mPreprocessing(0)
 {
     assert(!sInstance);
-    sInstance = 0;
+    sInstance = this;
     signal(SIGINT, sigIntHandler);
     mLocalServer.clientConnected().connect(this, &Daemon::onLocalClientConnected);
     mTcpServer.clientConnected().connect(this, &Daemon::onTcpClientConnected);
@@ -248,6 +248,7 @@ void Daemon::onNewMessage(Message *message, Connection *conn)
 
 void Daemon::onLocalConnectionDisconnected(Connection *conn)
 {
+    printf("%p FISK\n", conn);
     Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
     if (it != mConnections.end()) {
         error() << "onConnectionDisconnected" << it->second.job.sourceFile();
@@ -256,7 +257,6 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
         error() << "onConnectionDisconnected no connection data";
     }
 
-    conn->deleteLater();
     if (!mPendingJobs.isEmpty() && mLocalJobs.size() < mMaxJobs) {
         JobInfo::JobList::iterator jobentry = mPendingJobs.begin();
         shared_ptr<Job> job = jobentry->first;
@@ -269,9 +269,10 @@ void Daemon::onLocalConnectionDisconnected(Connection *conn)
 
 void Daemon::startLocalJob(const shared_ptr<Job> &job, LinkedList<JobInfo>::iterator info)
 {
-    job->startLocal();
     info->entry = mLocalJobs.insert(mLocalJobs.end(), std::make_pair(job, info));
     info->type = Job::Local;
+    job->jobFinished().connect(this, &Daemon::onLocalJobFinished);
+    job->startLocal();
 }
 
 static Path::VisitResult visitor(const Path &path, void *userData)
@@ -347,8 +348,17 @@ void Daemon::announceJobs()
     }
 }
 
-void Daemon::onJobFinished(Job *job)
+void Daemon::onLocalJobFinished(Job *job)
 {
+    printf("[%s] %s:%d: void Daemon::onLocalJobFinished(Job *job) [after]\n", __func__, __FILE__, __LINE__);
+    if (job->type() == Job::Local) {
+        printf("[%s] %s:%d: if (job->type() == Job::Local) { [after]\n", __func__, __FILE__, __LINE__);
+        assert(job->source());
+        ResultMessage response(job->returnCode(), job->stdOut(), job->stdErr());
+        Connection *conn = job->source();
+        conn->send(&response);
+        conn->finish();
+    }
 }
 
 void Daemon::onJobPreprocessed(Job *job)
@@ -392,15 +402,14 @@ void Daemon::handleJobMessage(Connection *conn, const JobMessage &jobMessage) //
 
     shared_ptr<Compiler> c = compiler(jobMessage.compiler(), jobMessage.path());
     if (!c) {
-        Result response(-1, String(), String::format<128>("Invalid compiler %s", jobMessage.compiler().constData()));
+        ResultMessage response(-1, String(), String::format<128>("Invalid compiler %s", jobMessage.compiler().constData()));
         conn->send(&response);
         conn->finish();
         // ### what to do here?
         return;
     }
-    assert(c);
     shared_ptr<Job> job(new Job(jobMessage, c->sha256, conn));
-    job->jobFinished().connect(this, &Daemon::onJobFinished);
+    job->jobFinished().connect(this, &Daemon::onLocalJobFinished);
 
     if (mLocalJobs.size() >= mMaxJobs) {
         JobInfo info = { Job::Pending };
@@ -408,59 +417,16 @@ void Daemon::handleJobMessage(Connection *conn, const JobMessage &jobMessage) //
         infoEntry->entry = mPendingJobs.insert(mPendingJobs.end(), std::make_pair(job, infoEntry));
         mIdToJob[job->id()] = infoEntry;
 
-        if (mPreprocessing < mMaxPreprocess) {
-            if (infoEntry->entry->first->startPreprocess()) {
-                infoEntry->entry->first->preprocessed().connect(this, &Daemon::onJobPreprocessed);
-                ++mPreprocessing;
-            }
+        if (mPreprocessing < mMaxPreprocess && infoEntry->entry->first->startPreprocess()) {
+            infoEntry->entry->first->preprocessed().connect(this, &Daemon::onJobPreprocessed);
+            ++mPreprocessing;
         }
-
-        mAnnounceTimer.start(shared_from_this(), 500, SingleShot, Announce);
-        return;
+    } else {
+        // Local job
+        JobInfo info = { Job::Local };
+        LinkedList<JobInfo>::iterator infoEntry = c->jobs.insert(c->jobs.end(), info);
+        startLocalJob(job, infoEntry);
     }
-
-    // Local job
-    JobInfo info = { Job::Local };
-    LinkedList<JobInfo>::iterator infoEntry = c->jobs.insert(c->jobs.end(), info);
-    startLocalJob(job, infoEntry);
-}
-
-void Daemon::onProcessFinished(Process *process)
-{
-    Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
-    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
-    assert(it != mConnections.end());
-    ConnectionData &data = it->second;
-    data.stdOut += process->readAllStdOut();
-    data.stdErr += process->readAllStdErr();
-    warning() << "Finished job" << data.job.compiler() << String::join(data.job.arguments(), " ")
-              << process->returnCode();
-    if (!data.stdOut.isEmpty())
-        warning() << data.stdOut;
-    if (!data.stdErr.isEmpty())
-        warning() << data.stdErr;
-    Result response(process->returnCode(), data.stdOut, data.stdErr);
-    conn->send(&response);
-    conn->finish();
-    error() << "finished" << data.job.sourceFile();
-}
-
-void Daemon::onProcessReadyReadStdOut(Process *process)
-{
-    Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
-    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
-    assert(it != mConnections.end());
-    ConnectionData &data = it->second;
-    data.stdOut += process->readAllStdOut();
-}
-
-void Daemon::onProcessReadyReadStdErr(Process *process)
-{
-    Connection *conn = static_cast<Connection*>(process->data(ConnectionPointer).toPointer());
-    Map<Connection*, ConnectionData>::iterator it = mConnections.find(conn);
-    assert(it != mConnections.end());
-    ConnectionData &data = it->second;
-    data.stdErr += process->readAllStdErr();
 }
 
 // ### maybe cache this for a little while
@@ -492,41 +458,53 @@ void Daemon::handleJobRequest(const String &sha, int count)
 
 shared_ptr<Daemon::Compiler> Daemon::compiler(const Path &compiler, const Path &path)
 {
-    const Map<Path, shared_ptr<Compiler> >::const_iterator compilerEntry = mCompilerByPath.find(compiler);
-    if (compilerEntry == mCompilerByPath.end()) {
-        shared_ptr<Compiler> &c = mCompilerByPath[compiler];
-        c.reset(new Compiler);
+    shared_ptr<Compiler> &c = mCompilerByPath[compiler];
+    if (!c) {
         Process process;
         List<String> environment;
         if (!path.isEmpty()) {
             environment = mEnviron;
             environment += ("PATH=" + path);
         }
-        process.exec(compiler, List<String>() << "-v" << "-E" << "-", environment);
+        if (!process.exec(compiler, List<String>() << "-v" << "-E" << "-", environment))
+            return shared_ptr<Compiler>();
 
         SHA256 sha;
         const List<String> lines = process.readAllStdErr().split('\n');
+        String version;
+        Set<String> compilerPaths;
         for (int i=0; i<lines.size(); ++i) {
             const String &line = lines.at(i);
             sha.update(line);
 
-            if (line.startsWith("COMPILER_PATH=")) {
-                const Set<String> paths = line.mid(14).split(':').toSet();
-                for (Set<String>::const_iterator it = paths.begin(); it != paths.end(); ++it) {
-                    const Path p = Path::resolved(*it);
-                    if (p.isDir()) {
-                        p.visit(visitor, &c->files);
-                    }
-                }
+            if (compilerPaths.isEmpty() && line.size() > 14 && line.startsWith("COMPILER_PATH=")) {
+                compilerPaths = line.mid(14).split(':').toSet();
+            } else if (version.isEmpty() && line.size() > 12 && line.startsWith("gcc version")) {
+                int space = line.indexOf(' ', 12);
+                if (space == -1)
+                    space = line.size();
+
+                version = line.mid(12, space - 12);
+                error() << version;
             }
         }
-        c->sha256 = sha.hash(SHA256::Hex);
-        c->path = compiler;
-        mCompilerBySha[c->sha256] = c;
-        warning() << "Created package" << compiler << c->files << c->sha256;
-        // CompilerMessage msg(compiler, c.files, c.sha256);
-        // createCompiler(&msg);
-        return c;
+
+        if (!compilerPaths.isEmpty()) {
+            c.reset(new Compiler);
+            for (Set<String>::const_iterator it = compilerPaths.begin(); it != compilerPaths.end(); ++it) {
+                const Path p = Path::resolved(*it);
+                if (p.isDir()) {
+                    p.visit(visitor, &c->files);
+                }
+            }
+
+            c->sha256 = sha.hash(SHA256::Hex);
+            c->path = compiler;
+            mCompilerBySha[c->sha256] = c;
+            warning() << "Created package" << compiler << c->files << c->sha256;
+            // CompilerMessage msg(compiler, c.files, c.sha256);
+            // createCompiler(&msg);
+        }
     }
-    return compilerEntry->second;
+    return c;
 }

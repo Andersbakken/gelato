@@ -5,7 +5,7 @@
 #include <rct/Messages.h>
 #include <rct/StopWatch.h>
 #include "JobMessage.h"
-#include "Result.h"
+#include "ResultMessage.h"
 #include "Common.h"
 #include <errno.h>
 
@@ -13,15 +13,15 @@ class Conn : public Connection
 {
 public:
     Conn(int timeout)
-        : status(Result::Timeout), returnValue(-1)
+        : status(ResultMessage::Timeout), returnValue(-1)
     {
         newMessage().connect(this, &Conn::onNewMessage);
     }
 
     void onNewMessage(Message *message, Connection *)
     {
-        assert(message->messageId() == Result::MessageId);
-        Result *response = static_cast<Result*>(message);
+        assert(message->messageId() == ResultMessage::MessageId);
+        ResultMessage *response = static_cast<ResultMessage*>(message);
         status = response->status();
         errorText = response->errorText();
         stdOut = response->stdOut();
@@ -36,7 +36,7 @@ public:
         EventLoop::instance()->exit();
     }
 
-    Result::Status status;
+    ResultMessage::Status status;
     String stdOut, stdErr, errorText;
     int returnValue;
 };
@@ -67,7 +67,7 @@ static inline bool send(JobMessage *job, int &returnCode)
     if (!connection->stdErr.isEmpty())
         fprintf(stderr, "%s", connection->stdErr.constData());
     returnCode = connection->returnValue;
-    return connection->status == Result::Success;
+    return connection->status == ResultMessage::Success;
 }
 
 int main(int argc, char **argv)
@@ -114,7 +114,7 @@ int main(int argc, char **argv)
 
     bool localJob = job.type() != JobMessage::Compile;
     if (!localJob) {
-        char *disabled = getenv("STRACCIATELLA_DISABLED");
+        char *disabled = getenv("GELATO_DISABLED");
         if (disabled && !strcmp(disabled, "1")) {
             localJob = true;
         }

@@ -1,6 +1,7 @@
 #include "Job.h"
 #include "GelatoMessage.h"
 #include "Daemon.h"
+#include "ResultMessage.h"
 #include <rct/Process.h>
 #include <rct/Connection.h>
 
@@ -25,8 +26,10 @@ void Job::sourceDisconnected(Connection*)
 
 void Job::startLocal()
 {
-    if (mType != Pending)
+    warning() << "starting local job" << mMsg.compiler() << mMsg.arguments();
+    if (mType != Pending) {
         kill();
+    }
     // ...
     mType = Local;
     mData.process = new Process;
@@ -35,7 +38,7 @@ void Job::startLocal()
     List<String> environ = Daemon::instance()->defaultEnvironment();
     environ += ("PATH=" + mMsg.path());
     if (!mData.process->start(mMsg.compiler(), mMsg.arguments(), environ)) {
-
+#warning what to do?
     } else {
         // write preprocessed data
         if (mMsg.isPreprocessed()) {
@@ -112,10 +115,10 @@ void Job::kill()
 void Job::onProcessFinished(Process *process)
 {
     assert(process == mData.process);
-    mType = Pending;
     mStdErr += process->readAllStdErr();
     mReturnCode = process->returnCode();
     if (mPreprocessing) {
+        mType = Preprocessed;
         mPreprocessing = false;
         mMsg.setPreprocessed(process->readAllStdOut());
         mPreprocessed(this);
@@ -126,6 +129,8 @@ void Job::onProcessFinished(Process *process)
     mData.process = 0;
     // warning() << "Finished job" << data.job.compiler() << String::join(data.job.arguments(), " ")
     //           << process->returnCode();
+    mJobFinished(this);
+
     // Result response(process->returnCode(), data.stdOut, data.stdErr);
     // conn->send(&response);
     // conn->finish();

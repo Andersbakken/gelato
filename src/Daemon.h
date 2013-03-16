@@ -31,13 +31,10 @@ private:
     void startLocalJob(const shared_ptr<Job> &job, LinkedList<JobInfo>::iterator it);
     void handleJobRequest(const String &sha, int count);
     bool createCompiler(CompilerMessage *message);
-    void onProcessFinished(Process *process);
-    void onProcessReadyReadStdOut(Process *process);
-    void onProcessReadyReadStdErr(Process *process);
     void onMulticastData(SocketClient *, String host, uint16_t port, String data);
     void onTcpClientConnected();
     void onTcpConnectionDisconnected(Connection *connection);
-    void onJobFinished(Job *job);
+    void onLocalJobFinished(Job *job);
     void onJobPreprocessed(Job *job);
     struct Compiler;
     shared_ptr<Compiler> compiler(const Path &compiler, const Path &pathEnv = Path());

@@ -32,6 +32,11 @@ public:
     signalslot::Signal1<Job*>& jobFinished() { return mJobFinished; }
     signalslot::Signal1<Job*>& preprocessed() { return mPreprocessed; }
 
+    Connection *source() const { return mSource; }
+
+    int returnCode() const { return mReturnCode; }
+    String stdOut() const { return mStdOut; }
+    String stdErr() const { return mStdErr; }
 private:
     void sourceDisconnected(Connection*);
     void onProcessFinished(Process *process);
